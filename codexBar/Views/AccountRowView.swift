@@ -11,8 +11,6 @@ struct AccountRowView: View {
     let onReauth: () -> Void
     let onDelete: () -> Void
 
-    @State private var showDeleteConfirm = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             // Line 1: org name + plan badge + active mark + switch button
@@ -42,19 +40,22 @@ struct AccountRowView: View {
 
                 Spacer()
 
-                // 删除按钮（带二次确认）
+                // 删除按钮（NSAlert 二次确认）
                 Button {
-                    showDeleteConfirm = true
+                    let alert = NSAlert()
+                    alert.messageText = L.confirmDelete(displayName)
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: L.delete)
+                    alert.addButton(withTitle: L.cancel)
+                    if alert.runModal() == .alertFirstButtonReturn {
+                        onDelete()
+                    }
                 } label: {
                     Image(systemName: "trash")
                         .font(.system(size: 10))
                 }
                 .buttonStyle(.borderless)
                 .foregroundColor(.secondary)
-                .confirmationDialog(L.confirmDelete(displayName), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-                    Button(L.delete, role: .destructive, action: onDelete)
-                    Button(L.cancel, role: .cancel) {}
-                }
 
                 if account.tokenExpired {
                     Button(L.reauth, action: onReauth)
