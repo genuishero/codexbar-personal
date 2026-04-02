@@ -3,6 +3,25 @@ import Combine
 import SwiftUI
 import UserNotifications
 
+private struct ViewHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private extension View {
+    func readHeight(_ onChange: @escaping (CGFloat) -> Void) -> some View {
+        background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: ViewHeightPreferenceKey.self, value: proxy.size.height)
+            }
+        )
+        .onPreferenceChange(ViewHeightPreferenceKey.self, perform: onChange)
+    }
+}
+
 struct MenuBarView: View {
     @EnvironmentObject var store: TokenStore
     @EnvironmentObject var oauth: OAuthManager
@@ -18,6 +37,7 @@ struct MenuBarView: View {
     @State private var isCostPanelHovered = false
     @State private var isCostPanelPresented = false
     @State private var pendingCostHide: DispatchWorkItem?
+    @State private var menuContentHeight: CGFloat = 0
 
     private let countdownTimer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
     private let quickTimer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
@@ -66,6 +86,16 @@ struct MenuBarView: View {
 
     private var isCompletelyEmpty: Bool {
         store.accounts.isEmpty && store.customProviders.isEmpty
+    }
+
+    private var maxMenuHeight: CGFloat {
+        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
+        let visibleHeight = screen?.visibleFrame.height ?? 900
+        return max(260, visibleHeight - 40)
+    }
+
+    private var shouldScrollMenu: Bool {
+        menuContentHeight > maxMenuHeight
     }
 
     var body: some View {
@@ -127,6 +157,19 @@ struct MenuBarView: View {
 
     @ViewBuilder
     private var mainMenuContent: some View {
+        if shouldScrollMenu {
+            ScrollView {
+                menuContentStack
+                    .readHeight { menuContentHeight = $0 }
+            }
+            .frame(height: maxMenuHeight)
+        } else {
+            menuContentStack
+                .readHeight { menuContentHeight = $0 }
+        }
+    }
+
+    private var menuContentStack: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("CodexAppBar")
@@ -201,107 +244,104 @@ struct MenuBarView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if !store.customProviders.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Providers")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.secondary)
-                                    .padding(.leading, 4)
+                VStack(alignment: .leading, spacing: 12) {
+                    if !store.customProviders.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Providers")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .padding(.leading, 4)
 
-                                ForEach(store.customProviders) { provider in
-                                    CompatibleProviderRowView(
-                                        provider: provider,
-                                        isActiveProvider: store.activeProvider?.id == provider.id,
-                                        activeAccountId: provider.activeAccountId
-                                    ) { account in
-                                        activateCompatibleProvider(providerID: provider.id, accountID: account.id)
-                                    } onAddAccount: {
-                                        openAddProviderAccountWindow(provider: provider)
-                                    } onDeleteAccount: { account in
-                                        deleteCompatibleAccount(providerID: provider.id, accountID: account.id)
-                                    } onDeleteProvider: {
-                                        deleteProvider(providerID: provider.id)
-                                    }
+                            ForEach(store.customProviders) { provider in
+                                CompatibleProviderRowView(
+                                    provider: provider,
+                                    isActiveProvider: store.activeProvider?.id == provider.id,
+                                    activeAccountId: provider.activeAccountId
+                                ) { account in
+                                    activateCompatibleProvider(providerID: provider.id, accountID: account.id)
+                                } onAddAccount: {
+                                    openAddProviderAccountWindow(provider: provider)
+                                } onDeleteAccount: { account in
+                                    deleteCompatibleAccount(providerID: provider.id, accountID: account.id)
+                                } onDeleteProvider: {
+                                    deleteProvider(providerID: provider.id)
                                 }
                             }
                         }
+                    }
 
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Text("OpenAI Accounts")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.secondary)
-                                    .padding(.leading, 4)
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("OpenAI Accounts")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .padding(.leading, 4)
 
-                                Spacer()
+                            Spacer()
 
-                                Button("Login OpenAI") {
-                                    startOAuthLogin()
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.mini)
-                                .font(.system(size: 10, weight: .medium))
+                            Button("Login OpenAI") {
+                                startOAuthLogin()
                             }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.mini)
+                            .font(.system(size: 10, weight: .medium))
+                        }
 
-                            if store.accounts.isEmpty {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("No OpenAI account added.")
+                        if store.accounts.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("No OpenAI account added.")
+                                    .font(.system(size: 11, weight: .medium))
+                                Text("Login to track quota and switch OpenAI OAuth accounts.")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.secondary.opacity(0.06))
+                            )
+                        } else {
+                            ForEach(groupedAccounts, id: \.email) { group in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(group.email)
                                         .font(.system(size: 11, weight: .medium))
-                                    Text("Login to track quota and switch OpenAI OAuth accounts.")
-                                        .font(.system(size: 10))
                                         .foregroundColor(.secondary)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 10)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(Color.secondary.opacity(0.06))
-                                )
-                            } else {
-                                ForEach(groupedAccounts, id: \.email) { group in
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(group.email)
-                                            .font(.system(size: 11, weight: .medium))
-                                            .foregroundColor(.secondary)
-                                            .lineLimit(1)
-                                            .padding(.leading, 4)
+                                        .lineLimit(1)
+                                        .padding(.leading, 4)
 
-                                        ForEach(group.accounts) { account in
-                                            AccountRowView(
-                                                account: account,
-                                                isActive: account.isActive,
-                                                now: now,
-                                                isRefreshing: refreshingAccounts.contains(account.id)
-                                            ) {
-                                                activateAccount(account)
-                                            } onRefresh: {
-                                                Task { await refreshAccount(account) }
-                                            } onReauth: {
-                                                reauthAccount(account)
-                                            } onDelete: {
-                                                store.remove(account)
-                                            }
+                                    ForEach(group.accounts) { account in
+                                        AccountRowView(
+                                            account: account,
+                                            isActive: account.isActive,
+                                            now: now,
+                                            isRefreshing: refreshingAccounts.contains(account.id)
+                                        ) {
+                                            activateAccount(account)
+                                        } onRefresh: {
+                                            Task { await refreshAccount(account) }
+                                        } onReauth: {
+                                            reauthAccount(account)
+                                        } onDelete: {
+                                            store.remove(account)
                                         }
                                     }
                                 }
                             }
                         }
-
-                        CostSummaryRowView(
-                            summary: store.localCostSummary,
-                            currency: currency,
-                            compactTokens: compactTokens
-                        )
-                        .onHover { hovering in
-                            setCostSummaryHover(hovering)
-                        }
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
+
+                    CostSummaryRowView(
+                        summary: store.localCostSummary,
+                        currency: currency,
+                        compactTokens: compactTokens
+                    )
+                    .onHover { hovering in
+                        setCostSummaryHover(hovering)
+                    }
                 }
-                .frame(minHeight: 180, maxHeight: 420)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
             }
 
             if let success = showSuccess {
@@ -397,6 +437,7 @@ struct MenuBarView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func relativeTime(_ date: Date) -> String {
