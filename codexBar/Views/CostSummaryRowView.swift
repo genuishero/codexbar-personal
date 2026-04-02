@@ -38,6 +38,12 @@ struct CostSummaryRowView: View {
 
 @MainActor
 struct CostDetailsPanelView: View {
+    static let panelWidth: CGFloat = 272
+
+    static func panelHeight(hasHistory: Bool) -> CGFloat {
+        hasHistory ? 336 : 184
+    }
+
     private struct Point: Identifiable {
         let id: String
         let date: Date
@@ -148,7 +154,11 @@ struct CostDetailsPanelView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .frame(width: 272)
+        .frame(
+            width: Self.panelWidth,
+            height: Self.panelHeight(hasHistory: !points.isEmpty),
+            alignment: .topLeading
+        )
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(NSColor.windowBackgroundColor))
@@ -200,4 +210,3 @@ struct CostDetailsPanelView: View {
         return "Hover bars for daily details"
     }
 }
-

@@ -1,6 +1,11 @@
 import AppKit
 import SwiftUI
 
+private final class HoverPanelWindow: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
 final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
     static let shared = DetachedWindowPresenter()
 
@@ -38,6 +43,43 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
+    func showHoverPanel<Content: View>(id: String, size: CGSize, origin: CGPoint, @ViewBuilder content: () -> Content) {
+        let anyView = AnyView(content())
+
+        if let existing = self.windows[id] {
+            existing.setContentSize(size)
+            existing.setFrameOrigin(origin)
+            if let controller = existing.contentViewController as? NSHostingController<AnyView> {
+                controller.rootView = anyView
+            } else {
+                existing.contentViewController = NSHostingController(rootView: anyView)
+            }
+            existing.orderFront(nil)
+            return
+        }
+
+        let controller = NSHostingController(rootView: anyView)
+        let window = HoverPanelWindow(
+            contentRect: NSRect(origin: origin, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        window.identifier = NSUserInterfaceItemIdentifier(id)
+        window.contentViewController = controller
+        window.level = .statusBar
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = false
+        window.hidesOnDeactivate = false
+        window.isReleasedWhenClosed = false
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+        window.delegate = self
+
+        self.windows[id] = window
+        window.orderFront(nil)
+    }
+
     func close(id: String) {
         guard let window = self.windows[id] else { return }
         window.close()
@@ -50,4 +92,3 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
         self.windows.removeValue(forKey: id)
     }
 }
-

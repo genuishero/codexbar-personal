@@ -22,9 +22,70 @@ private extension View {
     }
 }
 
+private struct ScreenFrameReader: NSViewRepresentable {
+    let onChange: (CGRect) -> Void
+
+    func makeNSView(context: Context) -> ReporterView {
+        ReporterView(onChange: onChange)
+    }
+
+    func updateNSView(_ nsView: ReporterView, context: Context) {
+        nsView.onChange = onChange
+        nsView.reportFrameIfNeeded()
+    }
+
+    final class ReporterView: NSView {
+        var onChange: (CGRect) -> Void
+        private var lastFrame: CGRect = .null
+
+        init(onChange: @escaping (CGRect) -> Void) {
+            self.onChange = onChange
+            super.init(frame: .zero)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            reportFrameIfNeeded()
+        }
+
+        override func layout() {
+            super.layout()
+            reportFrameIfNeeded()
+        }
+
+        override func setFrameSize(_ newSize: NSSize) {
+            super.setFrameSize(newSize)
+            reportFrameIfNeeded()
+        }
+
+        override func setFrameOrigin(_ newOrigin: NSPoint) {
+            super.setFrameOrigin(newOrigin)
+            reportFrameIfNeeded()
+        }
+
+        func reportFrameIfNeeded() {
+            guard let window else { return }
+            let frameInWindow = convert(bounds, to: nil)
+            let frameInScreen = window.convertToScreen(frameInWindow)
+            guard !frameInScreen.equalTo(lastFrame) else { return }
+            lastFrame = frameInScreen
+            DispatchQueue.main.async { [onChange, frameInScreen] in
+                onChange(frameInScreen)
+            }
+        }
+    }
+}
+
 struct MenuBarView: View {
     @EnvironmentObject var store: TokenStore
     @EnvironmentObject var oauth: OAuthManager
+
+    private let costPanelID = "cost-details-hover-panel"
 
     @State private var isRefreshing = false
     @State private var showError: String?
@@ -37,6 +98,7 @@ struct MenuBarView: View {
     @State private var isCostPanelHovered = false
     @State private var isCostPanelPresented = false
     @State private var pendingCostHide: DispatchWorkItem?
+    @State private var costSummaryScreenFrame: CGRect = .null
     @State private var menuContentHeight: CGFloat = 0
 
     private let countdownTimer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
@@ -99,25 +161,13 @@ struct MenuBarView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            mainMenuContent
-
-            if isCostPanelPresented {
-                CostDetailsPanelView(
-                    summary: store.localCostSummary,
-                    currency: currency,
-                    compactTokens: compactTokens,
-                    shortDay: shortDay
-                )
-                .onHover { hovering in
-                    setCostPanelHover(hovering)
-                }
-                .transition(.opacity)
-            }
-        }
-        .frame(width: isCostPanelPresented ? 582 : 300)
-        .animation(.easeInOut(duration: 0.16), value: isCostPanelPresented)
+        mainMenuContent
+        .frame(width: 300)
         .onReceive(countdownTimer) { _ in now = Date() }
+        .onReceive(store.$localCostSummary) { _ in
+            guard isCostPanelPresented else { return }
+            showCostPanel()
+        }
         .onReceive(quickTimer) { _ in
             guard menuVisible,
                   let active = store.accounts.first(where: { $0.isActive }),
@@ -152,6 +202,7 @@ struct MenuBarView: View {
             isCostPanelPresented = false
             isCostSummaryHovered = false
             isCostPanelHovered = false
+            DetachedWindowPresenter.shared.close(id: costPanelID)
         }
     }
 
@@ -245,6 +296,20 @@ struct MenuBarView: View {
                 .padding(.vertical, 24)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
+                    CostSummaryRowView(
+                        summary: store.localCostSummary,
+                        currency: currency,
+                        compactTokens: compactTokens
+                    )
+                    .background(
+                        ScreenFrameReader { frame in
+                            updateCostSummaryScreenFrame(frame)
+                        }
+                    )
+                    .onHover { hovering in
+                        setCostSummaryHover(hovering)
+                    }
+
                     if !store.customProviders.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Providers")
@@ -329,15 +394,6 @@ struct MenuBarView: View {
                                 }
                             }
                         }
-                    }
-
-                    CostSummaryRowView(
-                        summary: store.localCostSummary,
-                        currency: currency,
-                        compactTokens: compactTokens
-                    )
-                    .onHover { hovering in
-                        setCostSummaryHover(hovering)
                     }
                 }
                 .padding(.horizontal, 8)
@@ -504,6 +560,7 @@ struct MenuBarView: View {
         pendingCostHide?.cancel()
         pendingCostHide = nil
         isCostPanelPresented = true
+        showCostPanel()
     }
 
     private func scheduleCostPanelHideIfNeeded() {
@@ -511,10 +568,57 @@ struct MenuBarView: View {
         let work = DispatchWorkItem {
             if !isCostSummaryHovered && !isCostPanelHovered {
                 isCostPanelPresented = false
+                DetachedWindowPresenter.shared.close(id: costPanelID)
             }
         }
         pendingCostHide = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: work)
+    }
+
+    private func updateCostSummaryScreenFrame(_ frame: CGRect) {
+        guard !frame.isEmpty else { return }
+        guard !frame.equalTo(costSummaryScreenFrame) else { return }
+        costSummaryScreenFrame = frame
+        guard isCostPanelPresented else { return }
+        showCostPanel()
+    }
+
+    private func showCostPanel() {
+        guard !costSummaryScreenFrame.isEmpty else { return }
+
+        let panelSize = CGSize(
+            width: CostDetailsPanelView.panelWidth,
+            height: CostDetailsPanelView.panelHeight(hasHistory: !store.localCostSummary.dailyEntries.isEmpty)
+        )
+        let screen = NSScreen.screens.first { $0.frame.intersects(costSummaryScreenFrame) } ?? NSScreen.main
+        let visibleFrame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let spacing: CGFloat = 12
+        let margin: CGFloat = 8
+
+        var originX = costSummaryScreenFrame.maxX + spacing
+        if originX + panelSize.width > visibleFrame.maxX - margin {
+            originX = costSummaryScreenFrame.minX - spacing - panelSize.width
+        }
+        originX = min(max(originX, visibleFrame.minX + margin), visibleFrame.maxX - panelSize.width - margin)
+
+        var originY = costSummaryScreenFrame.maxY - panelSize.height
+        originY = min(max(originY, visibleFrame.minY + margin), visibleFrame.maxY - panelSize.height - margin)
+
+        DetachedWindowPresenter.shared.showHoverPanel(
+            id: costPanelID,
+            size: panelSize,
+            origin: CGPoint(x: originX, y: originY)
+        ) {
+            CostDetailsPanelView(
+                summary: store.localCostSummary,
+                currency: currency,
+                compactTokens: compactTokens,
+                shortDay: shortDay
+            )
+            .onHover { hovering in
+                setCostPanelHover(hovering)
+            }
+        }
     }
 
     private func activateAccount(_ account: TokenAccount) {
