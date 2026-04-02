@@ -416,6 +416,7 @@ struct MenuBarView: View {
                 .help("切换语言 / Switch Language")
 
                 Button {
+                    AppLifecycleDiagnostics.shared.markTermination(reason: "quit_button")
                     NSApplication.shared.terminate(nil)
                 } label: {
                     Image(systemName: "power")

@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct codexBarApp: App {
+    @NSApplicationDelegateAdaptor(AppLifecycleObserver.self) private var lifecycleObserver
     @StateObject private var store = TokenStore.shared
     @StateObject private var oauth = OAuthManager.shared
 
