@@ -55,6 +55,7 @@ struct MenuBarView: View {
     @State private var isCostSummaryHovered = false
     @State private var isCostPanelHovered = false
     @State private var isCostPanelPresented = false
+    @State private var didTriggerOpenRefresh = false
     @State private var pendingCostHide: DispatchWorkItem?
     @State private var costSummaryAnchorView: NSView?
     @State private var menuContentHeight: CGFloat = 0
@@ -126,8 +127,10 @@ struct MenuBarView: View {
         }
         .onAppear {
             store.markActiveAccount()
+            triggerRefreshOnOpenIfNeeded()
         }
         .onDisappear {
+            didTriggerOpenRefresh = false
             pendingCostHide?.cancel()
             pendingCostHide = nil
             isCostPanelPresented = false
@@ -719,6 +722,13 @@ struct MenuBarView: View {
             )
             center.add(request)
         }
+    }
+
+    private func triggerRefreshOnOpenIfNeeded() {
+        guard didTriggerOpenRefresh == false else { return }
+        didTriggerOpenRefresh = true
+        guard isRefreshing == false else { return }
+        Task { await refresh() }
     }
 
     private func refresh() async {
