@@ -14,7 +14,10 @@ struct MenuBarView: View {
     @State private var refreshingAccounts: Set<String> = []
     @State private var menuVisible = false
     @State private var languageToggle = false
-    @State private var showCostDetails = false
+    @State private var isCostSummaryHovered = false
+    @State private var isCostPanelHovered = false
+    @State private var isCostPanelPresented = false
+    @State private var pendingCostHide: DispatchWorkItem?
 
     private let countdownTimer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
     private let quickTimer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
@@ -66,6 +69,62 @@ struct MenuBarView: View {
     }
 
     var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            mainMenuContent
+
+            if isCostPanelPresented {
+                CostDetailsPanelView(
+                    summary: store.localCostSummary,
+                    currency: currency,
+                    compactTokens: compactTokens,
+                    shortDay: shortDay
+                )
+                .onHover { hovering in
+                    setCostPanelHover(hovering)
+                }
+                .transition(.opacity)
+            }
+        }
+        .frame(width: isCostPanelPresented ? 582 : 300)
+        .animation(.easeInOut(duration: 0.16), value: isCostPanelPresented)
+        .onReceive(countdownTimer) { _ in now = Date() }
+        .onReceive(quickTimer) { _ in
+            guard menuVisible,
+                  let active = store.accounts.first(where: { $0.isActive }),
+                  !active.secondaryExhausted else { return }
+            Task {
+                await refreshAccount(active)
+                store.markActiveAccount()
+                autoSwitchIfNeeded()
+            }
+        }
+        .onReceive(slowTimer) { _ in
+            Task {
+                if !menuVisible { await refresh() }
+                store.markActiveAccount()
+                store.refreshLocalCostSummary()
+                store.refreshBillingHistory()
+                autoSwitchIfNeeded()
+            }
+        }
+        .onAppear {
+            menuVisible = true
+            store.markActiveAccount()
+            store.refreshLocalCostSummary()
+            store.refreshBillingHistory()
+        }
+        .onDisappear {
+            menuVisible = false
+            pendingCostHide?.cancel()
+            pendingCostHide = nil
+            isCostPanelPresented = false
+            isCostSummaryHovered = false
+            isCostPanelHovered = false
+        }
+    }
+
+    @ViewBuilder
+    private var mainMenuContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("CodexAppBar")
@@ -116,33 +175,6 @@ struct MenuBarView: View {
                     Text("Model: \(store.activeModel)")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
-                    Text("Est. today: \(currency(store.localCostSummary.todayCostUSD)) · 30d: \(currency(store.localCostSummary.last30DaysCostUSD))")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                        .onHover { hovering in
-                            showCostDetails = hovering
-                        }
-                    if showCostDetails && !store.localCostSummary.dailyEntries.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("All-time: \(currency(store.localCostSummary.lifetimeCostUSD)) · Tokens: \(compactTokens(store.localCostSummary.lifetimeTokens))")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.secondary)
-                            ForEach(Array(store.localCostSummary.dailyEntries.prefix(7))) { entry in
-                                HStack {
-                                    Text(shortDay(entry.date))
-                                        .font(.system(size: 9))
-                                        .foregroundColor(.secondary)
-                                    Spacer()
-                                    Text(compactTokens(entry.totalTokens))
-                                        .font(.system(size: 9))
-                                        .foregroundColor(.secondary)
-                                    Text(currency(entry.costUSD))
-                                        .font(.system(size: 9, weight: .medium))
-                                }
-                            }
-                        }
-                        .padding(.top, 2)
-                    }
                     Text("Changes apply to new sessions.")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
@@ -255,69 +287,13 @@ struct MenuBarView: View {
                             }
                         }
 
-                        if !store.billingHistory.buckets.isEmpty || !store.billingHistory.recentSessions.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("History & Billing")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.secondary)
-                                    .padding(.leading, 4)
-
-                                ForEach(Array(store.billingHistory.buckets.prefix(6))) { bucket in
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        HStack {
-                                            Text("\(bucket.providerLabel) · \(bucket.accountLabel)")
-                                                .font(.system(size: 11, weight: .medium))
-                                            Spacer()
-                                            Text(currency(bucket.last30DaysCostUSD))
-                                                .font(.system(size: 11, weight: .medium))
-                                        }
-
-                                        HStack {
-                                            Text("Today \(currency(bucket.todayCostUSD))")
-                                                .font(.system(size: 10))
-                                                .foregroundColor(.secondary)
-                                            Spacer()
-                                            Text("\(bucket.sessionCount) sessions")
-                                                .font(.system(size: 10))
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.secondary.opacity(0.06))
-                                    )
-                                }
-
-                                if !store.billingHistory.recentSessions.isEmpty {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Recent Sessions")
-                                            .font(.system(size: 10, weight: .medium))
-                                            .foregroundColor(.secondary)
-                                            .padding(.leading, 4)
-
-                                        ForEach(Array(store.billingHistory.recentSessions.prefix(5))) { session in
-                                            HStack(spacing: 6) {
-                                                VStack(alignment: .leading, spacing: 1) {
-                                                    Text("\(session.providerLabel) · \(session.accountLabel)")
-                                                        .font(.system(size: 10, weight: .medium))
-                                                    Text(session.model)
-                                                        .font(.system(size: 9))
-                                                        .foregroundColor(.secondary)
-                                                }
-                                                Spacer()
-                                                Text(currency(session.costUSD))
-                                                    .font(.system(size: 10))
-                                                Text(shortDateTime(session.startedAt))
-                                                    .font(.system(size: 9))
-                                                    .foregroundColor(.secondary)
-                                            }
-                                            .padding(.horizontal, 4)
-                                        }
-                                    }
-                                }
-                            }
+                        CostSummaryRowView(
+                            summary: store.localCostSummary,
+                            currency: currency,
+                            compactTokens: compactTokens
+                        )
+                        .onHover { hovering in
+                            setCostSummaryHover(hovering)
                         }
                     }
                     .padding(.horizontal, 8)
@@ -419,34 +395,6 @@ struct MenuBarView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
-        .frame(width: 300)
-        .onReceive(countdownTimer) { _ in now = Date() }
-        .onReceive(quickTimer) { _ in
-            guard menuVisible,
-                  let active = store.accounts.first(where: { $0.isActive }),
-                  !active.secondaryExhausted else { return }
-            Task {
-                await refreshAccount(active)
-                store.markActiveAccount()
-                autoSwitchIfNeeded()
-            }
-        }
-        .onReceive(slowTimer) { _ in
-            Task {
-                if !menuVisible { await refresh() }
-                store.markActiveAccount()
-                store.refreshLocalCostSummary()
-                store.refreshBillingHistory()
-                autoSwitchIfNeeded()
-            }
-        }
-        .onAppear {
-            menuVisible = true
-            store.markActiveAccount()
-            store.refreshLocalCostSummary()
-            store.refreshBillingHistory()
-        }
-        .onDisappear { menuVisible = false }
     }
 
     private func relativeTime(_ date: Date) -> String {
@@ -489,6 +437,41 @@ struct MenuBarView: View {
             return String(format: "%.1fK", number / 1_000)
         }
         return "\(value)"
+    }
+
+    private func setCostSummaryHover(_ hovering: Bool) {
+        isCostSummaryHovered = hovering
+        if hovering {
+            presentCostPanel()
+        } else {
+            scheduleCostPanelHideIfNeeded()
+        }
+    }
+
+    private func setCostPanelHover(_ hovering: Bool) {
+        isCostPanelHovered = hovering
+        if hovering {
+            presentCostPanel()
+        } else {
+            scheduleCostPanelHideIfNeeded()
+        }
+    }
+
+    private func presentCostPanel() {
+        pendingCostHide?.cancel()
+        pendingCostHide = nil
+        isCostPanelPresented = true
+    }
+
+    private func scheduleCostPanelHideIfNeeded() {
+        pendingCostHide?.cancel()
+        let work = DispatchWorkItem {
+            if !isCostSummaryHovered && !isCostPanelHovered {
+                isCostPanelPresented = false
+            }
+        }
+        pendingCostHide = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: work)
     }
 
     private func activateAccount(_ account: TokenAccount) {
