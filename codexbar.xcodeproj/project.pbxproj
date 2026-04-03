@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		C0C16B462F7423BE00A2A16F /* codexbar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = codexbar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+			C0C16B6B2F7428A100A2A16F /* codexbarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = codexbarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -18,15 +19,30 @@
 			);
 			target = C0C16B452F7423BE00A2A16F /* codexBar */;
 		};
+			C0C16B6D2F7428A100A2A16F /* Exceptions for "codexBar" folder in "codexbarTests" target */ = {
+				isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+				membershipExceptions = (
+					Info.plist,
+					ContentView.swift,
+					codexBarApp.swift,
+				);
+				target = C0C16B782F7428A100A2A16F /* codexbarTests */;
+			};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		C0C16B482F7423BE00A2A16F /* codexBar */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				C0C16B682F74282500A2A16F /* Exceptions for "codexBar" folder in "codexBar" target */,
-			);
-			path = codexBar;
+			C0C16B482F7423BE00A2A16F /* codexBar */ = {
+				isa = PBXFileSystemSynchronizedRootGroup;
+				exceptions = (
+					C0C16B682F74282500A2A16F /* Exceptions for "codexBar" folder in "codexBar" target */,
+					C0C16B6D2F7428A100A2A16F /* Exceptions for "codexBar" folder in "codexbarTests" target */,
+				);
+				path = codexBar;
+				sourceTree = "<group>";
+			};
+			C0C16B6F2F7428A100A2A16F /* codexBarTests */ = {
+				isa = PBXFileSystemSynchronizedRootGroup;
+				path = codexBarTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -39,49 +55,88 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C0C16B722F7428A100A2A16F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C0C16B742F7428A100A2A16F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		C0C16B3D2F7423BE00A2A16F = {
-			isa = PBXGroup;
-			children = (
-				C0C16B482F7423BE00A2A16F /* codexBar */,
-				C0C16B472F7423BE00A2A16F /* Products */,
-			);
+			C0C16B3D2F7423BE00A2A16F = {
+				isa = PBXGroup;
+				children = (
+					C0C16B482F7423BE00A2A16F /* codexBar */,
+					C0C16B6F2F7428A100A2A16F /* codexBarTests */,
+					C0C16B472F7423BE00A2A16F /* Products */,
+				);
 			sourceTree = "<group>";
 		};
-		C0C16B472F7423BE00A2A16F /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				C0C16B462F7423BE00A2A16F /* codexbar.app */,
-			);
-			name = Products;
+			C0C16B472F7423BE00A2A16F /* Products */ = {
+				isa = PBXGroup;
+				children = (
+					C0C16B462F7423BE00A2A16F /* codexbar.app */,
+					C0C16B6B2F7428A100A2A16F /* codexbarTests.xctest */,
+				);
+				name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		C0C16B452F7423BE00A2A16F /* codexbar */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = C0C16B512F7423BF00A2A16F /* Build configuration list for PBXNativeTarget "codexbar" */;
-			buildPhases = (
-				C0C16B422F7423BE00A2A16F /* Sources */,
-				C0C16B432F7423BE00A2A16F /* Frameworks */,
-				C0C16B442F7423BE00A2A16F /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				C0C16B482F7423BE00A2A16F /* codexBar */,
-			);
+			C0C16B452F7423BE00A2A16F /* codexbar */ = {
+				isa = PBXNativeTarget;
+				buildConfigurationList = C0C16B512F7423BF00A2A16F /* Build configuration list for PBXNativeTarget "codexbar" */;
+				buildPhases = (
+					C0C16B422F7423BE00A2A16F /* Sources */,
+					C0C16B432F7423BE00A2A16F /* Frameworks */,
+					C0C16B442F7423BE00A2A16F /* Resources */,
+				);
+				buildRules = (
+				);
+				dependencies = (
+				);
+				fileSystemSynchronizedGroups = (
+					C0C16B482F7423BE00A2A16F /* codexBar */,
+				);
 			name = codexbar;
 			packageProductDependencies = (
 			);
 			productName = codexbar;
 			productReference = C0C16B462F7423BE00A2A16F /* codexbar.app */;
 			productType = "com.apple.product-type.application";
+		};
+			C0C16B782F7428A100A2A16F /* codexbarTests */ = {
+				isa = PBXNativeTarget;
+				buildConfigurationList = C0C16B832F7428A100A2A16F /* Build configuration list for PBXNativeTarget "codexbarTests" */;
+			buildPhases = (
+				C0C16B732F7428A100A2A16F /* Sources */,
+				C0C16B742F7428A100A2A16F /* Frameworks */,
+				C0C16B752F7428A100A2A16F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				);
+				fileSystemSynchronizedGroups = (
+					C0C16B482F7423BE00A2A16F /* codexBar */,
+					C0C16B6F2F7428A100A2A16F /* codexBarTests */,
+				);
+				name = codexbarTests;
+			packageProductDependencies = (
+			);
+			productName = codexbarTests;
+			productReference = C0C16B6B2F7428A100A2A16F /* codexbarTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -93,9 +148,12 @@
 				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
-					C0C16B452F7423BE00A2A16F = {
-						CreatedOnToolsVersion = 26.3;
-					};
+						C0C16B452F7423BE00A2A16F = {
+							CreatedOnToolsVersion = 26.3;
+						};
+						C0C16B782F7428A100A2A16F = {
+							CreatedOnToolsVersion = 26.3;
+						};
 				};
 			};
 			buildConfigurationList = C0C16B412F7423BE00A2A16F /* Build configuration list for PBXProject "codexbar" */;
@@ -110,11 +168,12 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C0C16B472F7423BE00A2A16F /* Products */;
 			projectDirPath = "";
-			projectRoot = "";
-			targets = (
-				C0C16B452F7423BE00A2A16F /* codexbar */,
-			);
-		};
+				projectRoot = "";
+				targets = (
+					C0C16B452F7423BE00A2A16F /* codexbar */,
+					C0C16B782F7428A100A2A16F /* codexbarTests */,
+				);
+			};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
@@ -128,9 +187,16 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		C0C16B422F7423BE00A2A16F /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
+			C0C16B422F7423BE00A2A16F /* Sources */ = {
+				isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+			C0C16B732F7428A100A2A16F /* Sources */ = {
+				isa = PBXSourcesBuildPhase;
+				buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -285,7 +351,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				MARKETING_VERSION = 1.1.1;
-				PRODUCT_BUNDLE_IDENTIFIER = xmasdong.codexAppBar;
+				PRODUCT_BUNDLE_IDENTIFIER = lzhl.codexAppBar;
 				PRODUCT_NAME = codexbar;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -324,7 +390,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				MARKETING_VERSION = 1.1.1;
-				PRODUCT_BUNDLE_IDENTIFIER = xmasdong.codexAppBar;
+				PRODUCT_BUNDLE_IDENTIFIER = lzhl.codexAppBar;
 				PRODUCT_NAME = codexbar;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -332,6 +398,38 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+			C0C16B7E2F7428A100A2A16F /* Debug */ = {
+				isa = XCBuildConfiguration;
+				buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				PRODUCT_BUNDLE_IDENTIFIER = lzhl.codexbar.tests;
+				PRODUCT_NAME = codexbarTests;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		C0C16B7F2F7428A100A2A16F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				PRODUCT_BUNDLE_IDENTIFIER = lzhl.codexbar.tests;
+				PRODUCT_NAME = codexbarTests;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
@@ -353,6 +451,15 @@
 			buildConfigurations = (
 				C0C16B522F7423BF00A2A16F /* Debug */,
 				C0C16B532F7423BF00A2A16F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+			C0C16B832F7428A100A2A16F /* Build configuration list for PBXNativeTarget "codexbarTests" */ = {
+				isa = XCConfigurationList;
+				buildConfigurations = (
+				C0C16B7E2F7428A100A2A16F /* Debug */,
+				C0C16B7F2F7428A100A2A16F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

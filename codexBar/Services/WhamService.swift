@@ -62,6 +62,17 @@ class WhamService {
 
     /// 刷新单个账号的用量和组织名
     func refreshOne(account: TokenAccount, store: TokenStore) async {
+        let accountID = account.id
+        let didBeginRefresh = await MainActor.run {
+            store.beginUsageRefresh(accountID: accountID)
+        }
+        guard didBeginRefresh else { return }
+        defer {
+            Task { @MainActor in
+                store.endUsageRefresh(accountID: accountID)
+            }
+        }
+
         do {
             async let usageResult = self.fetchUsage(account: account)
             async let orgName = self.fetchOrgName(account: account)
@@ -98,7 +109,18 @@ class WhamService {
     func refreshAll(store: TokenStore) async {
         await withTaskGroup(of: Void.self) { group in
             for account in store.accounts {
+                let accountID = account.id
                 group.addTask {
+                    let didBeginRefresh = await MainActor.run {
+                        store.beginUsageRefresh(accountID: accountID)
+                    }
+                    guard didBeginRefresh else { return }
+                    defer {
+                        Task { @MainActor in
+                            store.endUsageRefresh(accountID: accountID)
+                        }
+                    }
+
                     do {
                         async let usageResult = self.fetchUsage(account: account)
                         async let orgName = self.fetchOrgName(account: account)

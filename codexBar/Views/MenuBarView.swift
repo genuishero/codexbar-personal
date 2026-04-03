@@ -3,22 +3,21 @@ import Combine
 import SwiftUI
 import UserNotifications
 
-private struct ViewHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+private struct AdaptiveMenuScrollContainer<Content: View>: NSViewRepresentable {
+    let maxHeight: CGFloat
+    let content: Content
 
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
+    init(maxHeight: CGFloat, @ViewBuilder content: () -> Content) {
+        self.maxHeight = maxHeight
+        self.content = content()
     }
-}
 
-private extension View {
-    func readHeight(_ onChange: @escaping (CGFloat) -> Void) -> some View {
-        background(
-            GeometryReader { proxy in
-                Color.clear.preference(key: ViewHeightPreferenceKey.self, value: proxy.size.height)
-            }
-        )
-        .onPreferenceChange(ViewHeightPreferenceKey.self, perform: onChange)
+    func makeNSView(context: Context) -> AdaptiveMenuScrollHost {
+        AdaptiveMenuScrollHost(rootView: AnyView(content), maxHeight: maxHeight)
+    }
+
+    func updateNSView(_ nsView: AdaptiveMenuScrollHost, context: Context) {
+        nsView.update(rootView: AnyView(content), maxHeight: maxHeight)
     }
 }
 
@@ -40,11 +39,96 @@ private struct ViewReferenceReader: NSViewRepresentable {
     }
 }
 
+private final class AdaptiveMenuScrollHost: NSView {
+    private let scrollView = NSScrollView()
+    private let displayHostingView = NSHostingView(rootView: AnyView(EmptyView()))
+    private let measuringHostingView = NSHostingView(rootView: AnyView(EmptyView()))
+
+    private var maxHeight: CGFloat
+    private var measuredHeight: CGFloat = 360
+    private var isMeasuring = false
+    private var lastMeasuredWidth: CGFloat = 0
+
+    init(rootView: AnyView, maxHeight: CGFloat) {
+        self.maxHeight = maxHeight
+        super.init(frame: .zero)
+
+        self.scrollView.drawsBackground = false
+        self.scrollView.borderType = .noBorder
+        self.scrollView.autohidesScrollers = true
+        self.scrollView.scrollerStyle = .overlay
+        self.scrollView.hasVerticalScroller = false
+        self.scrollView.documentView = self.displayHostingView
+        self.scrollView.autoresizingMask = [.width, .height]
+
+        self.addSubview(self.scrollView)
+        self.update(rootView: rootView, maxHeight: maxHeight)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var isFlipped: Bool {
+        true
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: measuredHeight)
+    }
+
+    override func layout() {
+        super.layout()
+        self.scrollView.frame = self.bounds
+
+        let width = max(self.bounds.width, 1)
+        guard abs(self.lastMeasuredWidth - width) > 1 else { return }
+        self.lastMeasuredWidth = width
+        self.scheduleMeasurement()
+    }
+
+    func update(rootView: AnyView, maxHeight: CGFloat) {
+        self.maxHeight = maxHeight
+        self.displayHostingView.rootView = rootView
+        self.measuringHostingView.rootView = rootView
+        self.scheduleMeasurement()
+    }
+
+    private func scheduleMeasurement() {
+        DispatchQueue.main.async { [weak self] in
+            self?.recalculateLayout()
+        }
+    }
+
+    private func recalculateLayout() {
+        guard self.isMeasuring == false else { return }
+        self.isMeasuring = true
+        defer { self.isMeasuring = false }
+
+        let width = max(self.bounds.width, 1)
+        self.measuringHostingView.setFrameSize(NSSize(width: width, height: max(self.measuringHostingView.frame.height, 1)))
+
+        let fittingHeight = max(self.measuringHostingView.fittingSize.height, 1)
+        let targetHeight = min(self.maxHeight, fittingHeight)
+        let needsScroller = fittingHeight > self.maxHeight + 1
+
+        self.displayHostingView.setFrameSize(NSSize(width: width, height: fittingHeight))
+        self.scrollView.hasVerticalScroller = needsScroller
+
+        guard abs(self.measuredHeight - targetHeight) > 1 else { return }
+        self.measuredHeight = targetHeight
+        self.invalidateIntrinsicContentSize()
+        self.superview?.invalidateIntrinsicContentSize()
+    }
+}
+
 struct MenuBarView: View {
     @EnvironmentObject var store: TokenStore
     @EnvironmentObject var oauth: OAuthManager
 
     private let costPanelID = "cost-details-hover-panel"
+    private let usageRefreshInterval = OpenAIUsagePollingService.defaultRefreshInterval
 
     @State private var isRefreshing = false
     @State private var showError: String?
@@ -58,10 +142,23 @@ struct MenuBarView: View {
     @State private var didTriggerOpenRefresh = false
     @State private var pendingCostHide: DispatchWorkItem?
     @State private var costSummaryAnchorView: NSView?
-    @State private var menuContentHeight: CGFloat = 0
     @State private var isProvidersExpanded = false
+    @State private var countdownTimerConnection: Cancellable?
 
-    private let countdownTimer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
+    private let countdownTimer = Timer.publish(every: 10, on: .main, in: .common)
+    private static let currencyFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 2
+        return formatter
+    }()
+    private static let shortDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM-dd"
+        return formatter
+    }()
 
     private var groupedAccounts: [(email: String, accounts: [TokenAccount])] {
         var dict: [String: [TokenAccount]] = [:]
@@ -114,10 +211,6 @@ struct MenuBarView: View {
         return max(260, visibleHeight - 40)
     }
 
-    private var shouldScrollMenu: Bool {
-        menuContentHeight > maxMenuHeight
-    }
-
     var body: some View {
         mainMenuContent
         .frame(width: 300)
@@ -126,12 +219,24 @@ struct MenuBarView: View {
             guard isCostPanelPresented else { return }
             showCostPanel()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openAILoginDidSucceed)) { notification in
+            showError = nil
+            showSuccess = notification.userInfo?["message"] as? String ?? "Saved OpenAI account."
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openAILoginDidFail)) { notification in
+            showSuccess = nil
+            showError = notification.userInfo?["message"] as? String ?? "OpenAI login failed."
+        }
         .onAppear {
+            countdownTimerConnection?.cancel()
+            countdownTimerConnection = countdownTimer.connect()
             store.markActiveAccount()
             isProvidersExpanded = false
             triggerRefreshOnOpenIfNeeded()
         }
         .onDisappear {
+            countdownTimerConnection?.cancel()
+            countdownTimerConnection = nil
             didTriggerOpenRefresh = false
             pendingCostHide?.cancel()
             pendingCostHide = nil
@@ -144,15 +249,8 @@ struct MenuBarView: View {
 
     @ViewBuilder
     private var mainMenuContent: some View {
-        if shouldScrollMenu {
-            ScrollView {
-                menuContentStack
-                    .readHeight { menuContentHeight = $0 }
-            }
-            .frame(height: maxMenuHeight)
-        } else {
+        AdaptiveMenuScrollContainer(maxHeight: maxMenuHeight) {
             menuContentStack
-                .readHeight { menuContentHeight = $0 }
         }
     }
 
@@ -189,10 +287,8 @@ struct MenuBarView: View {
                 } label: {
                     Image(systemName: "arrow.clockwise")
                         .rotationEffect(.degrees(isRefreshing ? 360 : 0))
-                        .animation(isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isRefreshing)
                 }
                 .buttonStyle(.borderless)
-                .help(L.refreshUsage)
                 .disabled(isRefreshing)
             }
             .padding(.horizontal, 12)
@@ -275,7 +371,6 @@ struct MenuBarView: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .help(isProvidersExpanded ? "Collapse providers" : "Expand providers")
 
                             if isProvidersExpanded {
                                 ForEach(store.customProviders) { provider in
@@ -312,6 +407,8 @@ struct MenuBarView: View {
                             .buttonStyle(.borderedProminent)
                             .controlSize(.mini)
                             .font(.system(size: 10, weight: .medium))
+                            .accessibilityLabel("Login OpenAI Header Button")
+                            .accessibilityIdentifier("codexbar.login-openai.header")
                         }
 
                         if store.accounts.isEmpty {
@@ -418,7 +515,8 @@ struct MenuBarView: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.borderless)
-                .help(L.addAccount)
+                .accessibilityLabel("Login OpenAI Toolbar Button")
+                .accessibilityIdentifier("codexbar.login-openai.toolbar")
 
                 Button {
                     openAddProviderWindow()
@@ -427,7 +525,6 @@ struct MenuBarView: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.borderless)
-                .help("Add Provider")
 
                 Button {
                     switch L.languageOverride {
@@ -442,7 +539,6 @@ struct MenuBarView: View {
                         .font(.system(size: 10, weight: .medium))
                 }
                 .buttonStyle(.borderless)
-                .help("切换语言 / Switch Language")
 
                 Button {
                     AppLifecycleDiagnostics.shared.markTermination(reason: "quit_button")
@@ -452,7 +548,6 @@ struct MenuBarView: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.borderless)
-                .help(L.quit)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -468,12 +563,7 @@ struct MenuBarView: View {
     }
 
     private func currency(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        formatter.maximumFractionDigits = 2
-        formatter.minimumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: value)) ?? String(format: "$%.2f", value)
+        Self.currencyFormatter.string(from: NSNumber(value: value)) ?? String(format: "$%.2f", value)
     }
 
     private func compactTokens(_ value: Int) -> String {
@@ -491,9 +581,7 @@ struct MenuBarView: View {
     }
 
     private func shortDay(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MM-dd"
-        return formatter.string(from: date)
+        Self.shortDayFormatter.string(from: date)
     }
 
     private func resolveCostSummaryAnchor(_ view: NSView) {
@@ -582,7 +670,11 @@ struct MenuBarView: View {
     private func activateAccount(_ account: TokenAccount) {
         do {
             try store.activate(account)
+            store.refreshLocalCostSummary()
             showSuccess = "Updated Codex configuration. Changes apply to new sessions."
+            Task { @MainActor in
+                OpenAIUsagePollingService.shared.refreshNow()
+            }
         } catch {
             showError = error.localizedDescription
         }
@@ -591,6 +683,7 @@ struct MenuBarView: View {
     private func activateCompatibleProvider(providerID: String, accountID: String) {
         do {
             try store.activateCustomProvider(providerID: providerID, accountID: accountID)
+            store.refreshLocalCostSummary()
             showSuccess = "Updated Codex configuration. Changes apply to new sessions."
         } catch {
             showError = error.localizedDescription
@@ -616,46 +709,7 @@ struct MenuBarView: View {
     }
 
     private func startOAuthLogin() {
-        oauth.startOAuth { result in
-            switch result {
-            case .success(let tokens):
-                let account = AccountBuilder.build(from: tokens)
-                store.addOrUpdate(account)
-                Task { await WhamService.shared.refreshOne(account: account, store: store) }
-                showSuccess = "Updated Codex configuration. Changes apply to new sessions."
-                DetachedWindowPresenter.shared.close(id: "oauth-login")
-            case .failure(let error):
-                showError = error.localizedDescription
-            }
-        }
-        openOAuthWindow()
-    }
-
-    private func openOAuthWindow() {
-        DetachedWindowPresenter.shared.show(
-            id: "oauth-login",
-            title: "OpenAI OAuth",
-            size: CGSize(width: 560, height: 420)
-        ) {
-            OpenAIManualOAuthSheet(
-                authURL: oauth.pendingAuthURL ?? "",
-                isAuthenticating: oauth.isAuthenticating,
-                errorMessage: oauth.errorMessage
-            ) { input in
-                oauth.completeOAuth(from: input)
-            } onOpenBrowser: {
-                if let authURL = oauth.pendingAuthURL, let url = URL(string: authURL) {
-                    NSWorkspace.shared.open(url)
-                }
-            } onCopyLink: {
-                guard let authURL = oauth.pendingAuthURL else { return }
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(authURL, forType: .string)
-            } onCancel: {
-                oauth.cancel()
-                DetachedWindowPresenter.shared.close(id: "oauth-login")
-            }
-        }
+        OpenAILoginCoordinator.shared.start()
     }
 
     private func openAddProviderWindow() {
@@ -754,14 +808,23 @@ struct MenuBarView: View {
         guard didTriggerOpenRefresh == false else { return }
         didTriggerOpenRefresh = true
         guard isRefreshing == false else { return }
-        Task { await refresh() }
+        Task { await refresh(force: false) }
     }
 
-    private func refresh() async {
+    private func refresh(force: Bool = true) async {
+        guard force || store.hasStaleOAuthUsageSnapshot(maxAge: usageRefreshInterval) else {
+            store.refreshLocalCostSummary()
+            return
+        }
+
+        guard store.beginAllUsageRefresh() else { return }
         isRefreshing = true
+        defer {
+            store.endAllUsageRefresh()
+            isRefreshing = false
+        }
         await WhamService.shared.refreshAll(store: store)
         store.refreshLocalCostSummary()
-        isRefreshing = false
     }
 
     private func refreshAccount(_ account: TokenAccount) async {
@@ -773,16 +836,12 @@ struct MenuBarView: View {
     private func reauthAccount(_ account: TokenAccount) {
         oauth.startOAuth { result in
             switch result {
-            case .success(let tokens):
-                var updated = AccountBuilder.build(from: tokens)
-                if updated.accountId == account.accountId {
-                    updated.isActive = account.isActive
-                    updated.tokenExpired = false
-                    updated.isSuspended = false
-                }
-                store.addOrUpdate(updated)
-                Task { await WhamService.shared.refreshOne(account: updated, store: store) }
-                showSuccess = "Updated Codex configuration. Changes apply to new sessions."
+            case .success(let completion):
+                store.load()
+                Task { await WhamService.shared.refreshOne(account: completion.account, store: store) }
+                showSuccess = completion.active
+                    ? "Updated Codex configuration. Changes apply to new sessions."
+                    : "Saved OpenAI account."
             case .failure(let error):
                 showError = error.localizedDescription
             }

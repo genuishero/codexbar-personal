@@ -4,12 +4,11 @@ struct OpenAIManualOAuthSheet: View {
     let authURL: String
     let isAuthenticating: Bool
     let errorMessage: String?
+    @Binding var callbackInput: String
     let onComplete: (String) -> Void
     let onOpenBrowser: () -> Void
     let onCopyLink: () -> Void
     let onCancel: () -> Void
-
-    @State private var callbackInput = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -20,7 +19,7 @@ struct OpenAIManualOAuthSheet: View {
                 .font(.system(size: 12))
             Text("2. Finish authorization.")
                 .font(.system(size: 12))
-            Text("3. When the browser ends on `http://localhost:1455/auth/callback?...`, paste the full URL here. You can also paste just the `code` value.")
+            Text("3. Codexbar will auto-capture `http://localhost:1455/auth/callback?...` while this window is open. If automatic capture fails, paste the full URL here. You can also paste just the `code` value.")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
 
@@ -40,8 +39,12 @@ struct OpenAIManualOAuthSheet: View {
             HStack {
                 Button("Open Browser", action: onOpenBrowser)
                     .buttonStyle(.borderedProminent)
+                    .accessibilityLabel("Open Browser")
+                    .accessibilityIdentifier("codexbar.oauth.open-browser")
                 Button("Copy Link", action: onCopyLink)
                     .buttonStyle(.bordered)
+                    .accessibilityLabel("Copy Login Link")
+                    .accessibilityIdentifier("codexbar.oauth.copy-link")
             }
 
             TextEditor(text: $callbackInput)
@@ -52,6 +55,9 @@ struct OpenAIManualOAuthSheet: View {
                     RoundedRectangle(cornerRadius: 6)
                         .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
                 )
+                .accessibilityLabel("OAuth Callback Input")
+                .accessibilityIdentifier("codexbar.oauth.callback-input")
+                .accessibilityHint("Paste the localhost callback URL or OAuth code here.")
 
             if let errorMessage, !errorMessage.isEmpty {
                 Text(errorMessage)
@@ -64,11 +70,15 @@ struct OpenAIManualOAuthSheet: View {
                 Button("Cancel") {
                     onCancel()
                 }
+                .accessibilityLabel("Cancel Login")
+                .accessibilityIdentifier("codexbar.oauth.cancel")
                 Button("Complete Login") {
                     onComplete(callbackInput)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(callbackInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !isAuthenticating)
+                .accessibilityLabel("Complete Login")
+                .accessibilityIdentifier("codexbar.oauth.complete-login")
             }
         }
         .padding(16)
