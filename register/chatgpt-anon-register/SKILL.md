@@ -9,7 +9,7 @@ Use this skill when the task is specifically:
 
 - create a new ChatGPT account with a fresh iCloud Hide My Email alias
 - keep the flow pseudonymous instead of using the user's real name or birthday
-- run on macOS with `System Settings`, `Mail.app`, `cliclick`, and `playwright-cli`
+- run on macOS with `System Settings`, `Mail.app`, `swift`, and `playwright-cli`
 
 Do not use this skill for:
 
@@ -23,7 +23,7 @@ Do not use this skill for:
 - `隐藏邮件地址` / Hide My Email is available under iCloud+
 - `Mail.app` is configured and can receive the forwarded relay mail
 - Accessibility automation is enabled for `System Events`
-- `cliclick`, `swift`, `osascript`, `screencapture`, and `playwright-cli` are installed
+- `swift`, `osascript`, and `playwright-cli` are installed
 - Browser locale is compatible with the selectors used by the Playwright script
 
 ## Guardrails
@@ -81,13 +81,13 @@ BIRTH_DAY="08" \
 ## Scripts
 
 - `scripts/create_hide_my_email.sh`
-  Best-effort macOS UI automation for `系统设置 -> iCloud -> 隐藏邮件地址 -> 创建新地址`
+  Shell entry point for the pure-code Hide My Email creator
+- `scripts/create_hide_my_email_ax.swift`
+  AX-based state machine for `System Settings -> iCloud -> Hide My Email -> create address`
 - `scripts/get_latest_openai_code.applescript`
   Reads the newest six-digit OpenAI / ChatGPT code from recent inbox items
 - `scripts/register_chatgpt.sh`
   Drives the browser registration flow with Playwright CLI
-- `scripts/ocr_text.swift`
-  OCR helper used by the System Settings automation to find clickable labels on screen
 
 ## Output Contract
 
@@ -98,6 +98,11 @@ The registration script prints:
 - `PLAYWRIGHT_SESSION=...`
 
 The Hide My Email script prints the newly created relay address on success.
+
+Implementation note:
+
+- The Hide My Email flow is now Accessibility-first and resumes from the current `System Settings` state when possible.
+- Keep `PLAYWRIGHT_SESSION` names short on this Mac; long names can fail before browser launch because of local daemon socket path limits.
 
 ## Reference
 

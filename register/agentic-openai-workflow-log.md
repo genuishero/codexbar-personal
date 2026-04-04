@@ -1,0 +1,157 @@
+# Agentic OpenAI Workflow Log
+
+## Stable Workflow
+
+### Current Recommended Stable Path
+
+- Confirm branch is `agentic-cli`.
+- Run stage 1 precheck for `playwright-cli`, `osascript`, `swift`, `Mail.app`, `System Events`, Codexbar app/CLI, and local account state.
+- Prefer `./register/scripts/create_and_import_openai_account.sh` as the default end-to-end path because it already chains Hide My Email creation, OpenAI signup, and Codexbar import.
+- If the end-to-end script fails, switch by stage instead of repeating the whole flow blindly:
+  - Hide My Email: `./register/chatgpt-anon-register/scripts/create_hide_my_email.sh`
+    - Current preferred implementation is the AX-first helper `register/chatgpt-anon-register/scripts/create_hide_my_email_ax.swift`
+    - Best-known stage 2 sequence on this Mac: if `System Settings` is not open, launch it; if an `iCloud` window is already open, continue from there; otherwise deep-link to `Apple Account -> iCloud`; then press the real `隐藏邮件地址` AX button, press `创建新地址`, wait for the create sheet to surface a generated `@icloud.com` relay address, fill the label field, press `继续`, then `完成`
+    - The current shell wrapper is now a pure Swift launcher. Stage 2 no longer falls back to OCR or screenshot-driven clicking.
+  - Signup: `RELAY_EMAIL=... ./register/chatgpt-anon-register/scripts/register_chatgpt.sh`
+    - Keep `PLAYWRIGHT_SESSION` short. A long custom session name triggered `playwright-cli` daemon socket `EINVAL` on this Mac.
+  - Import: `OPENAI_EMAIL=... OPENAI_PASSWORD=... ./register/scripts/import_openai_account_to_codexbar.sh`
+- Prefer Codexbar localhost callback capture. Manual callback entry is a last-resort fallback only if the listener is actually broken.
+- After every successful stage, immediately write the validated path back into this file.
+
+### Current Recommended Lowest Token Path
+
+- Use repository shell scripts first.
+- Use `codexbarctl`/local config inspection for verification instead of repeated browser snapshots.
+- Use Playwright snapshots only when selectors are unknown or stale.
+- When visual inspection is still required on macOS, prefer window-only screenshots via `screencapture -l <window-id>` instead of full-desktop screenshots.
+- Once a page path is confirmed, keep using fixed selectors/scripts instead of continued high-cost observation.
+
+### Current Known Dependencies
+
+- Branch: `agentic-cli`
+- `/Applications/codexbar.app`
+- `playwright-cli`
+- `osascript`
+- `swift`
+- `python3`
+- `cliclick`
+- `screencapture`
+- `Mail.app` with working inbox sync
+- `System Events` accessibility automation
+- iCloud+ Hide My Email availability
+- Current installed `codexbar.app` bundle at `/Applications/codexbar.app`
+
+### Current Known External Risks
+
+- OpenAI may require phone verification, CAPTCHA, payment, or identity checks.
+- Hide My Email may be unavailable if iCloud+ is disabled or System Settings UI changed.
+- Mail delivery delays can break verification timing.
+- Browser locale/UI text changes can invalidate current selectors.
+- Current installed `codexbar.app` does not expose a bundled `codexbarctl` binary, so post-import verification currently falls back to config inspection unless a CLI target is added later.
+- The current AX helper for Hide My Email depends on the present button/window titles remaining compatible with `iCloud`, `隐藏邮件地址`, `创建新地址`, `继续`, and `完成`.
+- `playwright-cli` on this Mac rejects overly long custom session names with a Unix socket `listen EINVAL`, so short session names are required.
+
+## Failure Counter Table
+
+| Stage | Attempts | Failures | Latest Failure | Latest Recovery | Status |
+| --- | ---: | ---: | --- | --- | --- |
+| stage_1_precheck | 1 | 0 | none | Fallback to direct app/config inspection after confirming this `codexbar.app` build does not ship `codexbarctl` | complete |
+| stage_2_hide_my_email | 7 | 4 | Pure-code AX refactor initially failed twice: once by binding the email lookup to the wrong container, then by assuming the label field accepted direct `AXValue` writes | Recovered by switching to sheet-level AX containers and verified keyboard-input fallback for the label field; pure-code flow now succeeds both from cold start and from an already-open `iCloud` window | complete |
+| stage_3_openai_signup | 2 | 1 | First attempt failed before browser launch because `PLAYWRIGHT_SESSION='chatgpt-signup-20260404-1'` caused Playwright daemon socket `listen EINVAL` | Retried with short session name `cg1`; account reached authenticated `https://chatgpt.com/` | complete |
+| stage_4_mail_code | 1 | 0 | none | Registration script successfully read the OpenAI verification code from Mail.app and advanced past email verification | complete |
+| stage_5_codexbar_import | 0 | 0 | none | none | pending |
+| stage_6_post_import_verification | 0 | 0 | none | none | pending |
+
+## Switch Strategy Table
+
+| Stage | Default Path | Fallback 1 | Fallback 2 | Fallback 3 | Stop Condition |
+| --- | --- | --- | --- | --- | --- |
+| stage_1_precheck | Check `agentic-cli`, scripts, `playwright-cli`, `osascript`, `swift`, `Mail.app`, `System Events`, Hide My Email availability | Individually verify and repair missing dependencies | Use lower-level commands and local app/process checks | Record environment defect and stop at the minimum external blocker | Core dependency missing and not recoverable on this Mac |
+| stage_2_hide_my_email | `./register/chatgpt-anon-register/scripts/create_hide_my_email.sh` | Re-run while observing System Settings UI | Use repo OCR / `cliclick` / AppleScript helpers to recover | Patch the script minimally, then retry | iCloud+ or Hide My Email unavailable locally |
+| stage_3_openai_signup | `./register/chatgpt-anon-register/scripts/register_chatgpt.sh` | Execute the Playwright browser flow step-by-step | Use snapshots only when needed to resolve real selectors | Once stable, persist selectors in script instead of continued observation | OpenAI forces phone verification, manual CAPTCHA, payment, or identity check |
+| stage_4_mail_code | `./register/chatgpt-anon-register/scripts/get_latest_openai_code.applescript` | Trigger resend and fetch again | Narrow lookup to the newest OpenAI mail only | Repair Mail.app read logic and continue | Mail.app cannot receive mail or codes stay invalid |
+| stage_5_codexbar_import | `./register/scripts/import_openai_account_to_codexbar.sh` | Use `get_codexbar_auth_url.swift` plus step-by-step Playwright import | Prefer Codexbar localhost listener callback | Fall back to manual callback input only if listener is truly broken | Codexbar cannot start, or OAuth listener cannot listen and no viable fallback exists |
+| stage_6_post_import_verification | Verify with `codexbarctl accounts list --json` plus `~/.codexbar/config.json` | Check Codexbar config directly | Check active provider/account unchanged | Restart Codexbar and verify again if required | Local state file is corrupted and unrecoverable |
+
+## Run History
+
+### Run 2026-04-04 07:49 Asia/Shanghai
+
+- Scope: Validate `Hide My Email -> new OpenAI account -> import into Codexbar` on branch `agentic-cli` without switching the active account.
+- Initial action: created this unified workflow log before execution, per repository workflow requirement.
+- Starting point: required workflow files reviewed; no previous workflow log existed.
+- Stage 1 precheck result:
+  - Branch confirmed: `agentic-cli`
+  - Core commands present: `playwright-cli`, `npx`, `swift`, `osascript`, `cliclick`, `python3`, `screencapture`
+  - `System Events` accessibility status: enabled
+  - `Mail.app` accounts visible: `iCloud`, `Outlook`, `Gmail`
+  - `System Settings` launched successfully
+  - Codexbar app present at `/Applications/codexbar.app`
+  - Installed app bundle exposes `codexbar` only, not `codexbarctl`
+  - Baseline active state from `~/.codexbar/config.json`: active provider `s`, active account `622B59DE-6F43-4028-BC56-576493650E74`
+  - Baseline OpenAI OAuth accounts before this run: `lzhlngiea@gmail.com`, `pretty.guava-2o@icloud.com`, `llllizhelang@gmail.com`
+  - `get_codexbar_auth_url.swift` times out as expected without an open OAuth window; not treated as a failure
+- Stage 2 attempt 1 failure:
+  - Default path `./register/chatgpt-anon-register/scripts/create_hide_my_email.sh`
+  - Failure: OCR/click search did not find `^iCloud$` in the visible System Settings UI
+  - Recovery path: switch to Fallback 1 and inspect the actual System Settings screen before retrying
+- Stage 2 investigation after attempt 1:
+  - Root cause: `tell application "System Settings" to activate` could bring the app frontmost while leaving it with zero windows on this Mac
+  - Verified recovery primitive: `open -a '/System/Applications/System Settings.app'` yields `frontmost=true, windows=1`
+  - Verified deeper entry point: `open 'x-apple.systempreferences:com.apple.preferences.AppleIDPrefPane'` lands on the `Apple账户` pane
+  - OCR confirmed `iCloud` is visible once the Apple account pane is open
+- Stage 2 attempt 2 failure:
+  - A new uncommitted working-tree version of `register/chatgpt-anon-register/scripts/create_hide_my_email.sh` appeared during execution with a fresh `open_icloud_settings()` helper
+  - Retry no longer failed at `^iCloud$`, but the overall run still did not complete and surfaced `unexpected EOF while looking for matching '"'`
+  - Current posture: continue from the updated working-tree script, do not revert it, and verify the actual failing step before any further edit
+- Stage 2 attempt 3 failure:
+  - `bash -x` reproduction on the current working-tree script showed `open_icloud_settings()` timing out, then the fallback path successfully clicking `iCloud` and `隐藏邮件地址`
+  - Exact failure moved downstream to `could not find on-screen text matching: 创建新地址`
+  - External-block assessment result: not blocked by iCloud+/feature absence, because the current UI still exposes `隐藏邮件地址`, `49个地址`, and `管理`
+  - Decision: continue with Fallback 2 by using OCR/click recovery on the current management-page layout
+- Stage 2 recovery and success:
+  - Switched from OCR target clicking to Swift Accessibility inspection of the real `iCloud` window tree
+  - Confirmed the Hide My Email entry is an `AXButton` described as `隐藏邮件地址、49个地址`
+  - Confirmed the manager panel exposes a real `创建新地址` button and the create sheet exposes a generated relay address, a label text field, and `继续`
+  - Completed the create-address sheet through AX actions and created `deadly.tidbit8r@icloud.com`
+  - Repository changes written back immediately:
+    - Added `register/chatgpt-anon-register/scripts/create_hide_my_email_ax.swift`
+    - Updated `register/chatgpt-anon-register/scripts/create_hide_my_email.sh` to prefer the AX flow and fall back to OCR only if AX fails
+  - Effect of the change:
+    - Stage 2 no longer depends on landing on the System Settings home page
+    - Stage 2 no longer depends on OCR to click the key Hide My Email controls
+    - Screenshot-based debugging should use target-window capture, not full-desktop capture
+- Stage 2 pure-code hardening pass:
+  - User clarified the required behavior: if `System Settings` is not open, open it; if it is already open, continue; if the `iCloud` window is already open, do not restart from the top
+  - Updated `create_hide_my_email_ax.swift` into a real state machine with these states:
+    - ensure any `System Settings` window exists
+    - ensure `iCloud` window exists
+    - ensure Hide My Email manager is open
+    - ensure create-address sheet is open
+    - ensure relay email text is present
+    - ensure label field really contains the requested label
+    - ensure `继续` closes the create sheet
+  - Pure-code failures found and fixed:
+    - Failure 1: email lookup searched the smallest `AXGroup` containing `继续`, which only held the button; fix: bind create-sheet operations to the enclosing `AXSheet`
+    - Failure 2: the label field did not persist a direct `AXValue` write; fix: fall back to pure-code keyboard input after focusing the field, then verify the value actually changed
+    - Failure 3: `继续` could leave the sheet open if the label was not truly filled; fix: retry `继续` only after verified field population and wait on sheet disappearance instead of fixed sleep
+  - Final pure-code validation results:
+    - Success with `System Settings` already open on the `iCloud` window: created `tux-linty-8s@icloud.com`
+    - Success from a cold start with `System Settings` initially closed: created `helmet.51-bureau@icloud.com`
+  - Repository changes for this hardening pass:
+    - Replaced `register/chatgpt-anon-register/scripts/create_hide_my_email.sh` with a pure launcher that only runs `create_hide_my_email_ax.swift`
+    - Removed the OCR/screenshot/cliclick fallback from the stage 2 shell entry
+    - Added `register/AGENTS.md` so the subtree carries its own operating rules
+    - Updated `register/README.md` and `register/chatgpt-anon-register/SKILL.md` to describe the AX-only Hide My Email path and short Playwright session-name requirement
+    - Added `.playwright-cli/` to the repo ignore rules and deleted the local `.playwright-cli/` runtime artifact directory before commit
+    - Left the existing untracked `dist/` directory untouched because it predates the final cleanup step and is not part of the registration automation code path
+- Stage 3 attempt 1 failure:
+  - Command used a long custom Playwright session name `chatgpt-signup-20260404-1`
+  - Failure happened before page interaction: Playwright daemon socket creation returned `listen EINVAL`
+  - Recovery: rerun `register_chatgpt.sh` with short session name `cg1`
+- Stage 3 and Stage 4 success:
+  - Registration command: `RELAY_EMAIL='deadly.tidbit8r@icloud.com' PLAYWRIGHT_SESSION='cg1' ./register/chatgpt-anon-register/scripts/register_chatgpt.sh`
+  - Registered email: `deadly.tidbit8r@icloud.com`
+  - Generated password: `X1duEomOYYBdOeX4SxiSlJym`
+  - Verification mail code was fetched automatically from Mail.app by `get_latest_openai_code.applescript`
+  - Success signal: browser landed on `https://chatgpt.com/` with page title `ChatGPT`

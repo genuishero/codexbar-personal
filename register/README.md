@@ -16,6 +16,7 @@ The current Codexbar build auto-listens on `http://localhost:1455/auth/callback`
 - `Mail.app` is configured and can receive OpenAI verification emails
 - `System Events` automation is enabled
 - For anonymous registration: iCloud+ Hide My Email is available
+- `swift` is available for the AX-based Hide My Email helper
 
 ## Existing Account Import
 
@@ -62,6 +63,13 @@ Expected result:
 
 ## Notes
 
+- `register/chatgpt-anon-register/scripts/create_hide_my_email.sh` is now a pure launcher around `register/chatgpt-anon-register/scripts/create_hide_my_email_ax.swift`.
+- The Hide My Email helper resumes from the current `System Settings` state:
+  - if `System Settings` is closed, it opens it
+  - if `iCloud` is already open, it continues from there
+  - otherwise it deep-links directly into the Apple Account `iCloud` pane
+- Hide My Email creation no longer depends on OCR, screenshots, or `cliclick`.
 - Existing-account import uses `register/scripts/get_codexbar_auth_url.swift` to read the active OAuth URL from the Codexbar login window.
 - Email verification codes are read through `register/chatgpt-anon-register/scripts/get_latest_openai_code.applescript`.
+- On this Mac, keep custom `PLAYWRIGHT_SESSION` names short; long names can fail before browser launch because the local daemon socket path becomes invalid.
 - If OpenAI changes its login flow or demands stronger verification such as phone checks, the browser automation may need adjustment.
