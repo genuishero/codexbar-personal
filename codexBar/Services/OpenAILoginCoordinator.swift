@@ -55,7 +55,10 @@ final class OpenAILoginCoordinator {
             case .success(let completion):
                 let store = TokenStore.shared
                 store.load()
-                Task { await WhamService.shared.refreshOne(account: completion.account, store: store) }
+                Task {
+                    await WhamService.shared.refreshOne(account: completion.account, store: store)
+                    await AutoRoutingCoordinator.shared.handleAccountInventoryChanged()
+                }
                 DetachedWindowPresenter.shared.close(id: Self.windowID)
                 NotificationCenter.default.post(
                     name: .openAILoginDidSucceed,

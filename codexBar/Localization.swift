@@ -88,11 +88,29 @@ enum L {
 
     // MARK: - AccountRowView
     static var reauth: String          { zh ? "重新授权"     : "Re-authorize" }
-    static var switchBtn: String       { zh ? "切换"         : "Switch" }
+    static var useBtn: String          { zh ? "使用"         : "Use" }
+    static var switchBtn: String       { useBtn }
     static var tokenExpiredMsg: String { zh ? "Token 已过期，请重新授权" : "Token expired, please re-authorize" }
     static var bannedMsg: String       { zh ? "账号已停用"   : "Account suspended" }
     static var deleteBtn: String       { zh ? "删除"         : "Delete" }
     static var deleteConfirm: String   { zh ? "删除"         : "Delete" }
+    static var nextUseTitle: String    { zh ? "下一次使用"   : "Next Use" }
+    static var inUseNone: String       { zh ? "未检测到正在使用的 OpenAI 会话" : "No live OpenAI sessions detected" }
+
+    static func inUseSessions(_ count: Int) -> String {
+        zh ? "使用中 · \(count) 个会话" : "In Use · \(count) session\(count == 1 ? "" : "s")"
+    }
+
+    static func inUseSummary(_ sessions: Int, _ accounts: Int) -> String {
+        if zh {
+            return "使用中 · \(sessions) 个会话 / \(accounts) 个账号"
+        }
+        return "In Use · \(sessions) session\(sessions == 1 ? "" : "s") across \(accounts) account\(accounts == 1 ? "" : "s")"
+    }
+
+    static func inUseUnknownSessions(_ count: Int) -> String {
+        zh ? "另有 \(count) 个未归因会话" : "\(count) unattributed session\(count == 1 ? "" : "s")"
+    }
 
     static func deletePrompt(_ name: String) -> String {
         zh ? "确认删除 \(name)？" : "Delete \(name)?"

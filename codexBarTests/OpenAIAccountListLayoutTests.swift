@@ -2,6 +2,86 @@ import Foundation
 import XCTest
 
 final class OpenAIAccountListLayoutTests: XCTestCase {
+    func testDisplaySortingPlacesInUseAccountsBeforeUsableAccounts() {
+        let inUse = makeAccount(
+            email: "busy@example.com",
+            accountId: "acct_busy",
+            primaryUsedPercent: 65,
+            secondaryUsedPercent: 15
+        )
+        let healthierUsable = makeAccount(
+            email: "healthy@example.com",
+            accountId: "acct_healthy",
+            primaryUsedPercent: 5,
+            secondaryUsedPercent: 5
+        )
+        let attribution = OpenAILiveSessionAttribution(
+            sessions: [],
+            inUseSessionCounts: ["acct_busy": 1],
+            unknownSessionCount: 0,
+            recentActivityWindow: OpenAILiveSessionAttributionService.defaultRecentActivityWindow
+        )
+
+        let grouped = OpenAIAccountListLayout.groupedAccounts(
+            from: [healthierUsable, inUse],
+            attribution: attribution
+        )
+
+        XCTAssertEqual(grouped.map(\.email), ["busy@example.com", "healthy@example.com"])
+    }
+
+    func testDisplaySortingPlacesNextUseAccountsBeforeUsableAccounts() {
+        let nextUse = makeAccount(
+            email: "next@example.com",
+            accountId: "acct_next",
+            primaryUsedPercent: 70,
+            secondaryUsedPercent: 10,
+            isActive: true
+        )
+        let healthierUsable = makeAccount(
+            email: "healthy@example.com",
+            accountId: "acct_healthy",
+            primaryUsedPercent: 5,
+            secondaryUsedPercent: 5
+        )
+
+        let grouped = OpenAIAccountListLayout.groupedAccounts(
+            from: [healthierUsable, nextUse],
+            attribution: .empty
+        )
+
+        XCTAssertEqual(grouped.map(\.email), ["next@example.com", "healthy@example.com"])
+    }
+
+    func testDisplaySortingKeepsNormalOrderWithinPrioritizedAccounts() {
+        let inUseLowerQuota = makeAccount(
+            email: "busy@example.com",
+            accountId: "acct_busy",
+            primaryUsedPercent: 40,
+            secondaryUsedPercent: 15
+        )
+        let nextUseHigherQuota = makeAccount(
+            email: "next@example.com",
+            accountId: "acct_next",
+            primaryUsedPercent: 10,
+            secondaryUsedPercent: 10,
+            isActive: true
+        )
+        let attribution = OpenAILiveSessionAttribution(
+            sessions: [],
+            inUseSessionCounts: ["acct_busy": 1],
+            unknownSessionCount: 0,
+            recentActivityWindow: OpenAILiveSessionAttributionService.defaultRecentActivityWindow
+        )
+
+        let grouped = OpenAIAccountListLayout.groupedAccounts(
+            from: [inUseLowerQuota, nextUseHigherQuota],
+            attribution: attribution
+        )
+
+        XCTAssertEqual(grouped.map(\.email), ["next@example.com", "busy@example.com"])
+    }
+
     func testAccountsSortByPrimaryRemainingBeforeSecondaryRemaining() {
         let highPrimary = makeAccount(
             email: "high@example.com",

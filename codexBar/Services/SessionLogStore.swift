@@ -3,15 +3,17 @@ import Foundation
 final class SessionLogStore {
     static let shared = SessionLogStore()
 
-    struct Usage: Codable {
+    struct Usage: Codable, Equatable {
         let inputTokens: Int
         let cachedInputTokens: Int
         let outputTokens: Int
     }
 
-    struct SessionRecord: Codable {
+    struct SessionRecord: Codable, Equatable {
         let id: String
         let startedAt: Date
+        let lastActivityAt: Date
+        let isArchived: Bool
         let model: String
         let usage: Usage
     }
@@ -37,7 +39,7 @@ final class SessionLogStore {
     private let queue = DispatchQueue(label: "lzl.codexbar.session-log-store", qos: .utility)
     private let headerScanBytes = 4 * 1024
     private let tailScanBytes = 32 * 1024
-    private let persistedCacheVersion = 1
+    private let persistedCacheVersion = 2
 
     private var sessionCache: [URL: CachedSessionRecord] = [:]
 
@@ -63,6 +65,16 @@ final class SessionLogStore {
         }
     }
 
+    func sessionRecords() -> [SessionRecord] {
+        self.reduceSessions(into: [SessionRecord]()) { result, record in
+            result.append(record)
+        }
+    }
+
+    func currentSessionRecords() -> [SessionRecord] {
+        self.sessionRecords().filter { $0.isArchived == false }
+    }
+
     private func reduceSessionsLocked<Result>(
         into result: inout Result,
         _ update: (inout Result, SessionRecord) -> Void
@@ -83,7 +95,7 @@ final class SessionLogStore {
                     return
                 }
 
-                let record = self.parseSession(fileURL)
+                let record = self.parseSession(fileURL, fingerprint: fingerprint)
                 let cached = CachedSessionRecord(fingerprint: fingerprint, record: record)
                 nextSessionCache[fileURL] = cached
                 if let record {
@@ -126,14 +138,14 @@ final class SessionLogStore {
         )
     }
 
-    private func parseSession(_ fileURL: URL) -> SessionRecord? {
-        if let record = self.parseSessionFast(fileURL) {
+    private func parseSession(_ fileURL: URL, fingerprint: FileFingerprint) -> SessionRecord? {
+        if let record = self.parseSessionFast(fileURL, fingerprint: fingerprint) {
             return record
         }
-        return self.parseSessionSlow(fileURL)
+        return self.parseSessionSlow(fileURL, fingerprint: fingerprint)
     }
 
-    private func parseSessionFast(_ fileURL: URL) -> SessionRecord? {
+    private func parseSessionFast(_ fileURL: URL, fingerprint: FileFingerprint) -> SessionRecord? {
         var sessionID: String?
         var sessionDate: Date?
         var model: String?
@@ -174,12 +186,14 @@ final class SessionLogStore {
         return SessionRecord(
             id: sessionID ?? fileURL.deletingPathExtension().lastPathComponent,
             startedAt: startedAt,
+            lastActivityAt: fingerprint.modificationDate,
+            isArchived: self.isArchivedSessionFile(fileURL),
             model: resolvedModel,
             usage: usage
         )
     }
 
-    private func parseSessionSlow(_ fileURL: URL) -> SessionRecord? {
+    private func parseSessionSlow(_ fileURL: URL, fingerprint: FileFingerprint) -> SessionRecord? {
         var sessionID: String?
         var sessionDate: Date?
         var model: String?
@@ -201,9 +215,19 @@ final class SessionLogStore {
         return SessionRecord(
             id: sessionID ?? fileURL.deletingPathExtension().lastPathComponent,
             startedAt: startedAt,
+            lastActivityAt: fingerprint.modificationDate,
+            isArchived: self.isArchivedSessionFile(fileURL),
             model: resolvedModel,
             usage: usage
         )
+    }
+
+    private func isArchivedSessionFile(_ fileURL: URL) -> Bool {
+        let archivedRoot = self.codexRootURL
+            .appendingPathComponent("archived_sessions", isDirectory: true)
+            .standardizedFileURL
+            .path
+        return fileURL.standardizedFileURL.path.hasPrefix(archivedRoot)
     }
 
     private func consumeSessionMetadata(in line: String, sessionID: inout String?, sessionDate: inout Date?) {

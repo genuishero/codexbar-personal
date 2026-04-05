@@ -23,7 +23,7 @@ enum MenuBarIconResolver {
         if accounts.contains(where: { $0.secondaryExhausted }) {
             return "exclamationmark.triangle.fill"
         }
-        if accounts.contains(where: { $0.quotaExhausted || $0.primaryUsedPercent >= 80 || $0.secondaryUsedPercent >= 80 }) {
+        if accounts.contains(where: { $0.quotaExhausted || $0.isDegradedForNextUseRouting }) {
             return "bolt.circle.fill"
         }
         if fallbackProviderKind == .openAICompatible {
