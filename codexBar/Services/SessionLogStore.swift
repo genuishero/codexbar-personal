@@ -3,21 +3,19 @@ import Foundation
 final class SessionLogStore {
     static let shared = SessionLogStore()
 
-    struct Usage: Codable {
+    struct Usage: Codable, Equatable {
         let inputTokens: Int
         let cachedInputTokens: Int
         let outputTokens: Int
     }
 
-    struct SessionRecord: Codable {
+    struct SessionRecord: Codable, Equatable {
         let id: String
         let startedAt: Date
+        let lastActivityAt: Date
+        let isArchived: Bool
         let model: String
         let usage: Usage
-    }
-
-    struct Snapshot {
-        let sessions: [SessionRecord]
     }
 
     private struct FileFingerprint: Codable, Equatable {
@@ -35,71 +33,85 @@ final class SessionLogStore {
         let files: [String: CachedSessionRecord]
     }
 
+    private let fileManager: FileManager
+    private let codexRootURL: URL
+    private let persistedCacheURL: URL
     private let queue = DispatchQueue(label: "lzl.codexbar.session-log-store", qos: .utility)
-    private let snapshotReuseWindow: TimeInterval = 2
     private let headerScanBytes = 4 * 1024
     private let tailScanBytes = 32 * 1024
-    private let persistedCacheVersion = 1
+    private let persistedCacheVersion = 2
 
     private var sessionCache: [URL: CachedSessionRecord] = [:]
-    private var cachedSnapshot: Snapshot?
-    private var cachedSnapshotAt: Date?
 
-    private init() {
+    init(
+        fileManager: FileManager = .default,
+        codexRootURL: URL = CodexPaths.codexRoot,
+        persistedCacheURL: URL = CodexPaths.costSessionCacheURL
+    ) {
+        self.fileManager = fileManager
+        self.codexRootURL = codexRootURL
+        self.persistedCacheURL = persistedCacheURL
         self.sessionCache = self.loadPersistedCache()
     }
 
-    func snapshot() -> Snapshot {
+    func reduceSessions<Result>(
+        into initialResult: Result,
+        _ update: (inout Result, SessionRecord) -> Void
+    ) -> Result {
         self.queue.sync {
-            let now = Date()
-            if let cachedSnapshot = self.cachedSnapshot,
-               let cachedSnapshotAt = self.cachedSnapshotAt,
-               now.timeIntervalSince(cachedSnapshotAt) < self.snapshotReuseWindow {
-                return cachedSnapshot
-            }
-
-            let snapshot = self.buildSnapshot()
-            self.cachedSnapshot = snapshot
-            self.cachedSnapshotAt = now
-            return snapshot
+            var result = initialResult
+            self.reduceSessionsLocked(into: &result, update)
+            return result
         }
     }
 
-    private func buildSnapshot() -> Snapshot {
+    func sessionRecords() -> [SessionRecord] {
+        self.reduceSessions(into: [SessionRecord]()) { result, record in
+            result.append(record)
+        }
+    }
+
+    func currentSessionRecords() -> [SessionRecord] {
+        self.sessionRecords().filter { $0.isArchived == false }
+    }
+
+    private func reduceSessionsLocked<Result>(
+        into result: inout Result,
+        _ update: (inout Result, SessionRecord) -> Void
+    ) {
         let files = self.sessionFiles()
         var nextSessionCache: [URL: CachedSessionRecord] = [:]
-        var sessions: [SessionRecord] = []
-        sessions.reserveCapacity(files.count)
+        nextSessionCache.reserveCapacity(files.count)
 
         for fileURL in files {
-            guard let fingerprint = self.fingerprint(for: fileURL) else { continue }
-            if let cached = self.sessionCache[fileURL], cached.fingerprint == fingerprint {
-                nextSessionCache[fileURL] = cached
-                if let record = cached.record {
-                    sessions.append(record)
-                }
-                continue
-            }
+            autoreleasepool {
+                guard let fingerprint = self.fingerprint(for: fileURL) else { return }
 
-            let record = self.parseSession(fileURL)
-            let cached = CachedSessionRecord(fingerprint: fingerprint, record: record)
-            nextSessionCache[fileURL] = cached
-            if let record {
-                sessions.append(record)
+                if let cached = self.sessionCache[fileURL], cached.fingerprint == fingerprint {
+                    nextSessionCache[fileURL] = cached
+                    if let record = cached.record {
+                        update(&result, record)
+                    }
+                    return
+                }
+
+                let record = self.parseSession(fileURL, fingerprint: fingerprint)
+                let cached = CachedSessionRecord(fingerprint: fingerprint, record: record)
+                nextSessionCache[fileURL] = cached
+                if let record {
+                    update(&result, record)
+                }
             }
         }
 
         self.sessionCache = nextSessionCache
         self.persistSessionCache(nextSessionCache)
-
-        return Snapshot(sessions: sessions)
     }
 
     private func sessionFiles() -> [URL] {
-        let fileManager = FileManager.default
         let directories = [
-            CodexPaths.codexRoot.appendingPathComponent("sessions", isDirectory: true),
-            CodexPaths.codexRoot.appendingPathComponent("archived_sessions", isDirectory: true),
+            self.codexRootURL.appendingPathComponent("sessions", isDirectory: true),
+            self.codexRootURL.appendingPathComponent("archived_sessions", isDirectory: true),
         ]
 
         var files: [URL] = []
@@ -126,14 +138,14 @@ final class SessionLogStore {
         )
     }
 
-    private func parseSession(_ fileURL: URL) -> SessionRecord? {
-        if let record = self.parseSessionFast(fileURL) {
+    private func parseSession(_ fileURL: URL, fingerprint: FileFingerprint) -> SessionRecord? {
+        if let record = self.parseSessionFast(fileURL, fingerprint: fingerprint) {
             return record
         }
-        return self.parseSessionSlow(fileURL)
+        return self.parseSessionSlow(fileURL, fingerprint: fingerprint)
     }
 
-    private func parseSessionFast(_ fileURL: URL) -> SessionRecord? {
+    private func parseSessionFast(_ fileURL: URL, fingerprint: FileFingerprint) -> SessionRecord? {
         var sessionID: String?
         var sessionDate: Date?
         var model: String?
@@ -174,12 +186,14 @@ final class SessionLogStore {
         return SessionRecord(
             id: sessionID ?? fileURL.deletingPathExtension().lastPathComponent,
             startedAt: startedAt,
+            lastActivityAt: fingerprint.modificationDate,
+            isArchived: self.isArchivedSessionFile(fileURL),
             model: resolvedModel,
             usage: usage
         )
     }
 
-    private func parseSessionSlow(_ fileURL: URL) -> SessionRecord? {
+    private func parseSessionSlow(_ fileURL: URL, fingerprint: FileFingerprint) -> SessionRecord? {
         var sessionID: String?
         var sessionDate: Date?
         var model: String?
@@ -201,9 +215,19 @@ final class SessionLogStore {
         return SessionRecord(
             id: sessionID ?? fileURL.deletingPathExtension().lastPathComponent,
             startedAt: startedAt,
+            lastActivityAt: fingerprint.modificationDate,
+            isArchived: self.isArchivedSessionFile(fileURL),
             model: resolvedModel,
             usage: usage
         )
+    }
+
+    private func isArchivedSessionFile(_ fileURL: URL) -> Bool {
+        let archivedRoot = self.codexRootURL
+            .appendingPathComponent("archived_sessions", isDirectory: true)
+            .standardizedFileURL
+            .path
+        return fileURL.standardizedFileURL.path.hasPrefix(archivedRoot)
     }
 
     private func consumeSessionMetadata(in line: String, sessionID: inout String?, sessionDate: inout Date?) {
@@ -318,14 +342,18 @@ final class SessionLogStore {
             while let chunk = try handle.read(upToCount: chunkSize), chunk.isEmpty == false {
                 buffer.append(chunk)
                 while let newlineIndex = buffer.firstIndex(of: newline) {
-                    self.emitLine(from: buffer[..<newlineIndex], handleLine: handleLine)
+                    autoreleasepool {
+                        self.emitLine(from: buffer[..<newlineIndex], handleLine: handleLine)
+                    }
                     let nextIndex = buffer.index(after: newlineIndex)
                     buffer.removeSubrange(buffer.startIndex..<nextIndex)
                 }
             }
 
             if buffer.isEmpty == false {
-                self.emitLine(from: buffer[buffer.startIndex..<buffer.endIndex], handleLine: handleLine)
+                autoreleasepool {
+                    self.emitLine(from: buffer[buffer.startIndex..<buffer.endIndex], handleLine: handleLine)
+                }
             }
 
             return true
@@ -389,7 +417,7 @@ final class SessionLogStore {
     }
 
     private func loadPersistedCache() -> [URL: CachedSessionRecord] {
-        guard let data = try? Data(contentsOf: CodexPaths.costSessionCacheURL) else { return [:] }
+        guard let data = try? Data(contentsOf: self.persistedCacheURL) else { return [:] }
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -418,7 +446,7 @@ final class SessionLogStore {
         encoder.dateEncodingStrategy = .iso8601
 
         guard let data = try? encoder.encode(payload) else { return }
-        try? CodexPaths.writeSecureFile(data, to: CodexPaths.costSessionCacheURL)
+        try? CodexPaths.writeSecureFile(data, to: self.persistedCacheURL)
     }
 
     private func normalizeModel(_ raw: String) -> String {

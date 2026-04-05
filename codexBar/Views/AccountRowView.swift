@@ -3,13 +3,21 @@ import SwiftUI
 /// One org/account row under an email group
 struct AccountRowView: View {
     let account: TokenAccount
-    let isActive: Bool
+    let isNextUseTarget: Bool
+    let inUseSessionCount: Int
     let now: Date
     let isRefreshing: Bool
     let onActivate: () -> Void
     let onRefresh: () -> Void
     let onReauth: () -> Void
     let onDelete: () -> Void
+
+    private var rowState: OpenAIAccountRowState {
+        OpenAIAccountRowState(
+            isNextUseTarget: self.isNextUseTarget,
+            inUseSessionCount: self.inUseSessionCount
+        )
+    }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -27,7 +35,17 @@ struct AccountRowView: View {
 
             usageSummary
 
-            if isActive {
+            if let inUseBadgeTitle = rowState.inUseBadgeTitle {
+                Text(inUseBadgeTitle)
+                    .font(.system(size: 9, weight: .medium))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.14))
+                    .foregroundColor(.secondary)
+                    .cornerRadius(4)
+            }
+
+            if isNextUseTarget {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.accentColor)
                     .font(.system(size: 10))
@@ -74,8 +92,8 @@ struct AccountRowView: View {
                 .foregroundColor(isRefreshing ? .accentColor : .secondary)
                 .disabled(isRefreshing)
 
-                if !isActive {
-                    Button(L.switchBtn, action: onActivate)
+                if rowState.showsUseAction {
+                    Button(rowState.useActionTitle, action: onActivate)
                         .buttonStyle(.borderedProminent)
                         .controlSize(.mini)
                         .font(.system(size: 10, weight: .medium))
@@ -94,7 +112,7 @@ struct AccountRowView: View {
                 .strokeBorder(rowBorderColor, lineWidth: 0.6)
         }
         .overlay(alignment: .leading) {
-            if isActive {
+            if isNextUseTarget {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Color.accentColor)
                     .frame(width: 3)
@@ -131,25 +149,25 @@ struct AccountRowView: View {
     private var statusColor: Color {
         if account.isBanned { return .red }
         if account.quotaExhausted { return .orange }
-        if account.primaryUsedPercent >= 80 || account.secondaryUsedPercent >= 80 { return .yellow }
+        if account.isDegradedForNextUseRouting { return .yellow }
         return .green
     }
 
     private var rowBackgroundColor: Color {
-        if isActive { return Color.accentColor.opacity(0.14) }
+        if isNextUseTarget { return Color.accentColor.opacity(0.14) }
         if account.isBanned { return Color.red.opacity(0.045) }
         if account.quotaExhausted { return Color.orange.opacity(0.05) }
-        if account.primaryUsedPercent >= 80 || account.secondaryUsedPercent >= 80 {
+        if account.isDegradedForNextUseRouting {
             return Color.yellow.opacity(0.05)
         }
         return Color.secondary.opacity(0.055)
     }
 
     private var rowBorderColor: Color {
-        if isActive { return Color.accentColor.opacity(0.28) }
+        if isNextUseTarget { return Color.accentColor.opacity(0.28) }
         if account.isBanned { return Color.red.opacity(0.12) }
         if account.quotaExhausted { return Color.orange.opacity(0.14) }
-        if account.primaryUsedPercent >= 80 || account.secondaryUsedPercent >= 80 {
+        if account.isDegradedForNextUseRouting {
             return Color.yellow.opacity(0.14)
         }
         return Color.primary.opacity(0.08)

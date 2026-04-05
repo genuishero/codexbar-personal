@@ -9,6 +9,7 @@ xcuserdata/
 # Build
 build/
 DerivedData/
+dist/
 *.ipa
 *.dSYM.zip
 *.dSYM
@@ -39,15 +40,17 @@ fastlane/test_output
 .Spotlight-V100
 .Trashes
 
-# Local tool state / release artifacts
+# Local agent state / release artifacts
 .omx/
 .ufoo/
 .playwright-cli/
 output/
-register/
-dist/
 
 # Sensitive
 *.p12
 *.mobileprovision
 *.provisionprofile
+
+# Register runtime logs
+register/codex.csv
+register/*.log

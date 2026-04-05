@@ -46,6 +46,7 @@ struct CodexBarOAuthAccountService {
 
     func importAccount(_ account: TokenAccount, activate: Bool) throws -> OAuthAccountMutationResult {
         var config = try self.configStore.loadOrMigrate()
+        let previousAccountID = config.active.accountId
         let result = config.upsertOAuthAccount(account, activate: activate)
 
         try self.configStore.save(config)
@@ -55,7 +56,8 @@ struct CodexBarOAuthAccountService {
         if activate {
             try self.switchJournalStore.appendActivation(
                 providerID: config.active.providerId,
-                accountID: config.active.accountId
+                accountID: config.active.accountId,
+                previousAccountID: previousAccountID
             )
         }
 
@@ -69,13 +71,15 @@ struct CodexBarOAuthAccountService {
 
     func activateAccount(accountID: String) throws -> OAuthAccountMutationResult {
         var config = try self.configStore.loadOrMigrate()
+        let previousAccountID = config.active.accountId
         let stored = try config.activateOAuthAccount(accountID: accountID)
 
         try self.configStore.save(config)
         try self.syncService.synchronize(config: config)
         try self.switchJournalStore.appendActivation(
             providerID: config.active.providerId,
-            accountID: config.active.accountId
+            accountID: config.active.accountId,
+            previousAccountID: previousAccountID
         )
 
         guard let tokenAccount = self.makeTokenAccount(from: stored, config: config) else {

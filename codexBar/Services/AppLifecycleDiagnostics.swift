@@ -134,6 +134,7 @@ final class AppLifecycleObserver: NSObject, NSApplicationDelegate {
         AppLifecycleDiagnostics.shared.beginSession()
         Task { @MainActor in
             OpenAIUsagePollingService.shared.start()
+            AutoRoutingCoordinator.shared.start()
         }
     }
 

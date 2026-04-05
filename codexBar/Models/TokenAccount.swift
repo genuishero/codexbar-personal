@@ -1,6 +1,8 @@
 import Foundation
 
 struct TokenAccount: Codable, Identifiable {
+    private static let degradedRoutingThresholdPercent = 80.0
+    private static let exhaustedRoutingThresholdPercent = 100.0
     var id: String { accountId }
     var email: String
     var accountId: String
@@ -95,14 +97,24 @@ struct TokenAccount: Codable, Identifiable {
     // MARK: - Computed
 
     nonisolated var isBanned: Bool { isSuspended }
-    nonisolated var primaryExhausted: Bool { primaryUsedPercent >= 100 }
-    nonisolated var secondaryExhausted: Bool { secondaryUsedPercent >= 100 }
+    nonisolated var primaryExhausted: Bool { primaryUsedPercent >= Self.exhaustedRoutingThresholdPercent }
+    nonisolated var secondaryExhausted: Bool { secondaryUsedPercent >= Self.exhaustedRoutingThresholdPercent }
     nonisolated var quotaExhausted: Bool { primaryExhausted || secondaryExhausted }
+    nonisolated var isAvailableForNextUseRouting: Bool { isBanned == false && tokenExpired == false && quotaExhausted == false }
+    nonisolated var isDegradedForNextUseRouting: Bool {
+        self.isAvailableForNextUseRouting && (
+            primaryUsedPercent >= Self.degradedRoutingThresholdPercent ||
+            secondaryUsedPercent >= Self.degradedRoutingThresholdPercent
+        )
+    }
 
     nonisolated var usageStatus: UsageStatus {
         if isBanned { return .banned }
         if quotaExhausted { return .exceeded }
-        if primaryUsedPercent >= 80 || secondaryUsedPercent >= 80 { return .warning }
+        if primaryUsedPercent >= Self.degradedRoutingThresholdPercent ||
+            secondaryUsedPercent >= Self.degradedRoutingThresholdPercent {
+            return .warning
+        }
         return .ok
     }
 

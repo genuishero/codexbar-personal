@@ -84,10 +84,23 @@ final class TokenStore: ObservableObject {
         self.persistIgnoringErrors(syncCodex: self.config.active.providerId == provider.id)
     }
 
-    func activate(_ account: TokenAccount) throws {
+    func activate(
+        _ account: TokenAccount,
+        reason: AutoRoutingSwitchReason = .manual,
+        automatic: Bool = false,
+        forced: Bool = false,
+        protectedByManualGrace: Bool = false
+    ) throws {
+        let previousAccountID = self.activeAccount()?.accountId
         _ = try self.config.activateOAuthAccount(accountID: account.accountId)
         try self.persist(syncCodex: true)
-        try self.appendSwitchJournal()
+        try self.appendSwitchJournal(
+            previousAccountID: previousAccountID,
+            reason: reason,
+            automatic: automatic,
+            forced: forced,
+            protectedByManualGrace: protectedByManualGrace
+        )
     }
 
     func activeAccount() -> TokenAccount? {
@@ -95,6 +108,7 @@ final class TokenStore: ObservableObject {
     }
 
     func activateCustomProvider(providerID: String, accountID: String) throws {
+        let previousAccountID = self.config.active.accountId
         guard var provider = self.config.providers.first(where: { $0.id == providerID && $0.kind == .openAICompatible }) else {
             throw TokenStoreError.providerNotFound
         }
@@ -108,10 +122,11 @@ final class TokenStore: ObservableObject {
         self.config.active.accountId = accountID
 
         try self.persist(syncCodex: true)
-        try self.appendSwitchJournal()
+        try self.appendSwitchJournal(previousAccountID: previousAccountID)
     }
 
     func addCustomProvider(label: String, baseURL: String, accountLabel: String, apiKey: String) throws {
+        let previousAccountID = self.config.active.accountId
         let trimmedLabel = label.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAccountLabel = accountLabel.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -145,7 +160,7 @@ final class TokenStore: ObservableObject {
         self.config.active.accountId = account.id
 
         try self.persist(syncCodex: true)
-        try self.appendSwitchJournal()
+        try self.appendSwitchJournal(previousAccountID: previousAccountID)
     }
 
     func addCustomProviderAccount(providerID: String, label: String, apiKey: String) throws {
@@ -319,9 +334,24 @@ final class TokenStore: ObservableObject {
     }
 
     private func appendSwitchJournal() throws {
+        try self.appendSwitchJournal(previousAccountID: nil)
+    }
+
+    private func appendSwitchJournal(
+        previousAccountID: String?,
+        reason: AutoRoutingSwitchReason = .manual,
+        automatic: Bool = false,
+        forced: Bool = false,
+        protectedByManualGrace: Bool = false
+    ) throws {
         try self.switchJournalStore.appendActivation(
             providerID: self.config.active.providerId,
-            accountID: self.config.active.accountId
+            accountID: self.config.active.accountId,
+            previousAccountID: previousAccountID,
+            reason: reason,
+            automatic: automatic,
+            forced: forced,
+            protectedByManualGrace: protectedByManualGrace
         )
     }
 

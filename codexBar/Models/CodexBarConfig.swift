@@ -27,6 +27,40 @@ struct CodexBarActiveSelection: Codable {
     var accountId: String?
 }
 
+struct CodexBarAutoRoutingSettings: Codable, Equatable {
+    var enabled: Bool
+    var urgentThresholdPercent: Double
+    var switchThresholdPercent: Double
+    var minImprovementPercent: Double
+    var cooldownSeconds: TimeInterval
+    var manualOverrideGraceSeconds: TimeInterval
+    var fullSweepIntervalSeconds: TimeInterval
+    var pinnedAccountId: String?
+    var excludedAccountIds: [String]
+
+    init(
+        enabled: Bool = false,
+        urgentThresholdPercent: Double = 5,
+        switchThresholdPercent: Double = 10,
+        minImprovementPercent: Double = 10,
+        cooldownSeconds: TimeInterval = 300,
+        manualOverrideGraceSeconds: TimeInterval = 900,
+        fullSweepIntervalSeconds: TimeInterval = 1_800,
+        pinnedAccountId: String? = nil,
+        excludedAccountIds: [String] = []
+    ) {
+        self.enabled = enabled
+        self.urgentThresholdPercent = urgentThresholdPercent
+        self.switchThresholdPercent = switchThresholdPercent
+        self.minImprovementPercent = minImprovementPercent
+        self.cooldownSeconds = cooldownSeconds
+        self.manualOverrideGraceSeconds = manualOverrideGraceSeconds
+        self.fullSweepIntervalSeconds = fullSweepIntervalSeconds
+        self.pinnedAccountId = pinnedAccountId
+        self.excludedAccountIds = excludedAccountIds
+    }
+}
+
 struct CodexBarProviderAccount: Codable, Identifiable, Equatable {
     var id: String
     var kind: CodexBarAccountKind
@@ -210,18 +244,38 @@ struct CodexBarConfig: Codable {
     var version: Int
     var global: CodexBarGlobalSettings
     var active: CodexBarActiveSelection
+    var autoRouting: CodexBarAutoRoutingSettings
     var providers: [CodexBarProvider]
 
     init(
         version: Int = 1,
         global: CodexBarGlobalSettings = CodexBarGlobalSettings(),
         active: CodexBarActiveSelection = CodexBarActiveSelection(),
+        autoRouting: CodexBarAutoRoutingSettings = CodexBarAutoRoutingSettings(),
         providers: [CodexBarProvider] = []
     ) {
         self.version = version
         self.global = global
         self.active = active
+        self.autoRouting = autoRouting
         self.providers = providers
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case version
+        case global
+        case active
+        case autoRouting
+        case providers
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        self.global = try container.decodeIfPresent(CodexBarGlobalSettings.self, forKey: .global) ?? CodexBarGlobalSettings()
+        self.active = try container.decodeIfPresent(CodexBarActiveSelection.self, forKey: .active) ?? CodexBarActiveSelection()
+        self.autoRouting = try container.decodeIfPresent(CodexBarAutoRoutingSettings.self, forKey: .autoRouting) ?? CodexBarAutoRoutingSettings()
+        self.providers = try container.decodeIfPresent([CodexBarProvider].self, forKey: .providers) ?? []
     }
 
     func provider(id: String?) -> CodexBarProvider? {
