@@ -147,27 +147,12 @@ final class AutoRoutingCoordinator {
     private func maintainNextUseAccountIfNeeded(fallbackReason: AutoRoutingSwitchReason) async {
         guard self.currentSettings.enabled else { return }
         guard self.shouldManageOpenAIOAuthAccounts() else { return }
-
-        guard let decision = AutoRoutingPolicy.decision(
+        _ = AutoRoutingPolicy.decision(
             from: self.store.accounts,
             currentAccountID: self.store.activeAccount()?.accountId,
             settings: self.currentSettings,
             fallbackReason: fallbackReason
-        ) else {
-            return
-        }
-
-        do {
-            try self.store.activate(
-                decision.account,
-                reason: decision.reason,
-                automatic: decision.reason.isAutomatic,
-                forced: decision.reason.isForced,
-                protectedByManualGrace: false
-            )
-        } catch {
-            NSLog("codexbar auto-routing activation failed: %@", error.localizedDescription)
-        }
+        )
     }
 
     private func shouldManageOpenAIOAuthAccounts() -> Bool {

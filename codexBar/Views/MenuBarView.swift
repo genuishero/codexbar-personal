@@ -261,6 +261,7 @@ struct MenuBarView: View {
     private let oauthAccountService = CodexBarOAuthAccountService()
     private let openAIAccountCSVService = OpenAIAccountCSVService()
     private let openAIAccountCSVPanelService = OpenAIAccountCSVPanelService()
+    private let codexDesktopLaunchProbeService = CodexDesktopLaunchProbeService()
 
     @State private var isRefreshing = false
     @State private var showError: String?
@@ -279,6 +280,8 @@ struct MenuBarView: View {
     @State private var isProvidersExpanded = false
     @State private var countdownTimerConnection: Cancellable?
     @State private var runningThreadTimerConnection: Cancellable?
+    @State private var autoRoutingPromptSuppressedKey: String?
+    @State private var autoRoutingPromptInFlight = false
 
     private let countdownTimer = Timer.publish(every: 10, on: .main, in: .common)
     private let runningThreadTimer = Timer.publish(every: 1, on: .main, in: .common)
@@ -343,6 +346,21 @@ struct MenuBarView: View {
     private var lowerSuccessMessage: String? {
         guard let showSuccess else { return nil }
         return showSuccess == configUpdateSuccessMessage ? nil : showSuccess
+    }
+
+    private var currentAutoRoutingDecision: AutoRoutingPolicy.Decision? {
+        guard self.store.config.autoRouting.enabled else { return nil }
+        guard self.store.activeProvider?.kind == .openAIOAuth else { return nil }
+        guard self.runningThreadSummary.isUnavailable == false else { return nil }
+        guard self.runningThreadSummary.totalRunningThreadCount == 0 else { return nil }
+        guard self.codexDesktopLaunchProbeService.runningCodexApplications().isEmpty == false else { return nil }
+
+        return AutoRoutingPolicy.decision(
+            from: self.store.accounts,
+            currentAccountID: self.store.activeAccount()?.accountId,
+            settings: self.store.config.autoRouting,
+            fallbackReason: .startupBestAccount
+        )
     }
 
     var body: some View {
@@ -766,7 +784,7 @@ struct MenuBarView: View {
                             runningThreadCount: rowState.runningThreadCount,
                             isRefreshing: refreshingAccounts.contains(account.id)
                         ) {
-                            activateAccount(account)
+                            Task { await activateAccount(account) }
                         } onRefresh: {
                             Task { await refreshAccount(account, announceResult: true) }
                         } onReauth: {
@@ -896,17 +914,23 @@ struct MenuBarView: View {
         }
     }
 
-    private func activateAccount(_ account: TokenAccount) {
+    private func activateAccount(_ account: TokenAccount) async {
         do {
-            try store.activate(account)
-            store.refreshLocalCostSummary()
-            refreshRunningThreadAttribution()
-            showSuccess = configUpdateSuccessMessage
+            try await self.switchAccountAndLaunchNewInstance(
+                account,
+                reason: .manual,
+                automatic: false,
+                forced: false,
+                closeExistingCodexApps: false
+            )
+            self.store.refreshLocalCostSummary()
+            self.refreshRunningThreadAttribution()
+            self.showSuccess = L.codexLaunchSwitchedInstanceStarted(account.email)
             Task { @MainActor in
                 OpenAIUsagePollingService.shared.refreshNow()
             }
         } catch {
-            showError = error.localizedDescription
+            self.showError = error.localizedDescription
         }
     }
 
@@ -1127,6 +1151,102 @@ struct MenuBarView: View {
         }
     }
 
+    private func switchAccountAndLaunchNewInstance(
+        _ account: TokenAccount,
+        reason: AutoRoutingSwitchReason,
+        automatic: Bool,
+        forced: Bool,
+        closeExistingCodexApps: Bool
+    ) async throws {
+        let previousActiveAccount = self.store.activeAccount()
+        let existingCodexPIDs = Set(
+            closeExistingCodexApps
+                ? self.codexDesktopLaunchProbeService.runningCodexApplications().map(\.processIdentifier)
+                : []
+        )
+
+        do {
+            try self.store.activate(
+                account,
+                reason: reason,
+                automatic: automatic,
+                forced: forced,
+                protectedByManualGrace: false
+            )
+
+            let launchedApplication = try await self.codexDesktopLaunchProbeService.launchNewInstance()
+            if closeExistingCodexApps {
+                var priorPIDs = existingCodexPIDs
+                if let launchedPID = launchedApplication?.processIdentifier {
+                    priorPIDs.remove(launchedPID)
+                }
+                self.codexDesktopLaunchProbeService.terminateApplications(
+                    withProcessIdentifiers: priorPIDs
+                )
+            }
+        } catch {
+            if let previousActiveAccount,
+               previousActiveAccount.accountId != account.accountId {
+                try? self.store.activate(previousActiveAccount)
+            }
+            throw error
+        }
+    }
+
+    private func autoRoutingPromptKey(for decision: AutoRoutingPolicy.Decision) -> String {
+        let currentAccountID = self.store.activeAccount()?.accountId ?? "none"
+        return "\(currentAccountID)->\(decision.account.accountId):\(decision.reason.rawValue)"
+    }
+
+    private func maybePresentAutoRoutingRecommendation() {
+        guard self.autoRoutingPromptInFlight == false else { return }
+        guard let decision = self.currentAutoRoutingDecision else {
+            self.autoRoutingPromptSuppressedKey = nil
+            return
+        }
+
+        let promptKey = self.autoRoutingPromptKey(for: decision)
+        guard self.autoRoutingPromptSuppressedKey != promptKey else { return }
+
+        let fromLabel = self.store.activeAccount()?.email ?? self.store.activeAccount()?.accountId ?? "Current"
+        let toLabel = decision.account.email.isEmpty ? decision.account.accountId : decision.account.email
+
+        self.autoRoutingPromptInFlight = true
+        defer { self.autoRoutingPromptInFlight = false }
+
+        let alert = NSAlert()
+        alert.messageText = L.autoSwitchPromptTitle
+        alert.informativeText = L.autoSwitchPromptBody(fromLabel, toLabel)
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: L.confirm)
+        alert.addButton(withTitle: L.cancel)
+
+        let response = alert.runModal()
+        self.autoRoutingPromptSuppressedKey = promptKey
+
+        guard response == .alertFirstButtonReturn else { return }
+
+        Task {
+            do {
+                try await self.switchAccountAndLaunchNewInstance(
+                    decision.account,
+                    reason: decision.reason,
+                    automatic: true,
+                    forced: decision.reason.isForced,
+                    closeExistingCodexApps: true
+                )
+                self.store.refreshLocalCostSummary()
+                self.refreshRunningThreadAttribution()
+                self.showError = nil
+                self.showSuccess = L.autoSwitchBody(fromLabel, toLabel)
+            } catch {
+                self.showSuccess = nil
+                self.showError = error.localizedDescription
+                self.autoRoutingPromptSuppressedKey = nil
+            }
+        }
+    }
+
     private func refreshRunningThreadAttribution() {
         // Runtime sqlite scans stay off-main so the menu keeps responding while
         // polling short-window thread activity from Codex App / CLI / subagents.
@@ -1141,6 +1261,7 @@ struct MenuBarView: View {
             DispatchQueue.main.async {
                 guard sequence == self.runningThreadAttributionRefreshSequence else { return }
                 self.runningThreadAttribution = attribution
+                self.maybePresentAutoRoutingRecommendation()
             }
         }
     }

@@ -32,6 +32,10 @@ enum CodexPaths {
     static var costCacheURL: URL { self.codexBarRoot.appendingPathComponent("cost-cache.json") }
     static var costSessionCacheURL: URL { self.codexBarRoot.appendingPathComponent("cost-session-cache.json") }
     static var switchJournalURL: URL { self.codexBarRoot.appendingPathComponent("switch-journal.jsonl") }
+    static var managedLaunchRootURL: URL { self.codexBarRoot.appendingPathComponent("managed-launch", isDirectory: true) }
+    static var managedLaunchBinURL: URL { self.managedLaunchRootURL.appendingPathComponent("bin", isDirectory: true) }
+    static var managedLaunchHitsURL: URL { self.managedLaunchRootURL.appendingPathComponent("hits", isDirectory: true) }
+    static var managedLaunchStateURL: URL { self.managedLaunchRootURL.appendingPathComponent("last-launch.json") }
 
     static var configBackupURL: URL { self.codexRoot.appendingPathComponent("config.toml.bak-codexbar-last") }
     static var authBackupURL: URL { self.codexRoot.appendingPathComponent("auth.json.bak-codexbar-last") }
@@ -40,6 +44,8 @@ enum CodexPaths {
         try FileManager.default.createDirectory(at: self.codexRoot, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: self.codexBarRoot, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: self.oauthFlowsDirectoryURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: self.managedLaunchBinURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: self.managedLaunchHitsURL, withIntermediateDirectories: true)
     }
 
     static func writeSecureFile(_ data: Data, to url: URL) throws {

@@ -34,6 +34,21 @@ enum L {
     static var refreshUsage: String    { zh ? "刷新用量"            : "Refresh Usage" }
     static var addAccount: String      { zh ? "添加账号"            : "Add Account" }
     static var openAICSVToolbar: String { zh ? "导入或导出 OpenAI CSV" : "Import or Export OpenAI CSV" }
+    static func codexLaunchSwitchedInstanceStarted(_ account: String) -> String {
+        zh ? "已切换到「\(account)」，并为该账号新开一个 Codex 实例。" : "Switched to \"\(account)\" and launched a new Codex instance for it."
+    }
+    static var codexLaunchProbeAppNotFound: String {
+        zh ? "未找到 Codex.app" : "Codex.app was not found"
+    }
+    static var codexLaunchProbeExecutableMissing: String {
+        zh ? "未找到 bundled codex 可执行文件" : "The bundled codex executable was not found"
+    }
+    static var codexLaunchProbeTimedOut: String {
+        zh ? "启动 Codex.app 超时" : "Launching Codex.app timed out"
+    }
+    static func codexLaunchProbeFailed(_ message: String) -> String {
+        zh ? "受管启动探针失败：\(message)" : "Managed launch probe failed: \(message)"
+    }
     static var exportOpenAICSVAction: String { zh ? "导出 OpenAI CSV…" : "Export OpenAI CSV…" }
     static var importOpenAICSVAction: String { zh ? "导入 OpenAI CSV…" : "Import OpenAI CSV…" }
     static var openAICSVExportPrompt: String { zh ? "导出" : "Export" }
@@ -138,6 +153,15 @@ enum L {
     static var autoSwitchTitle: String {
         zh ? "已自动切换账号" : "Account Auto-Switched"
     }
+    static var autoSwitchPromptTitle: String {
+        zh ? "推荐切换并新开实例" : "Recommended: Switch and Launch New Instance"
+    }
+    static func autoSwitchPromptBody(_ from: String, _ to: String) -> String {
+        zh
+            ? "当前账号「\(from)」额度已接近阈值。\n\n推荐切换到「\(to)」，并新开一个 Codex 实例。\n\n如果你点“确定”，Codexbar 会切到推荐账号，启动一个新实例，然后关闭当前运行中的 Codex 实例。"
+            : "The current account \"\(from)\" is close to its quota threshold.\n\nCodexbar recommends switching to \"\(to)\" and launching a new Codex instance.\n\nIf you choose Confirm, Codexbar will switch to the recommended account, launch a new instance, and close the currently running Codex instance."
+    }
+    static var confirm: String { zh ? "确定" : "Confirm" }
     static func autoSwitchBody(_ from: String, _ to: String) -> String {
         zh
             ? "「\(from)」额度不足，已自动切换至「\(to)」"

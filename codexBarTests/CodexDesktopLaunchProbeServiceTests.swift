@@ -1,0 +1,149 @@
+import Foundation
+import XCTest
+
+@MainActor
+final class CodexDesktopLaunchProbeServiceTests: CodexBarTestCase {
+    func testLaunchProbeCreatesWrapperAndInjectsEnvironment() async throws {
+        let codexAppURL = try self.makeFakeCodexApp()
+        var capturedURL: URL?
+        var capturedEnvironment: [String: String] = [:]
+
+        let service = CodexDesktopLaunchProbeService(
+            locateCodexApp: { codexAppURL },
+            launchApp: { appURL, environment in
+                capturedURL = appURL
+                capturedEnvironment = environment
+                return nil
+            },
+            environment: ["PATH": "/usr/bin:/bin"],
+            now: { self.date("2026-04-08T01:30:00Z") },
+            makeUUID: { UUID(uuidString: "11111111-2222-3333-4444-555555555555")! }
+        )
+
+        let state = try await service.launchProbe()
+
+        XCTAssertEqual(capturedURL, codexAppURL)
+        XCTAssertEqual(state.runID, "11111111-2222-3333-4444-555555555555")
+        XCTAssertEqual(state.launchedAt, self.date("2026-04-08T01:30:00Z"))
+        XCTAssertEqual(
+            capturedEnvironment["PATH"],
+            CodexPaths.managedLaunchBinURL.path + ":/usr/bin:/bin"
+        )
+        XCTAssertEqual(
+            capturedEnvironment["CODEXBAR_DESKTOP_PROBE_RUN_ID"],
+            "11111111-2222-3333-4444-555555555555"
+        )
+        XCTAssertEqual(
+            capturedEnvironment["CODEXBAR_DESKTOP_PROBE_HITS_DIR"],
+            CodexPaths.managedLaunchHitsURL.path
+        )
+
+        let wrapperURL = CodexPaths.managedLaunchBinURL.appendingPathComponent("codex")
+        let script = try String(contentsOf: wrapperURL, encoding: .utf8)
+        XCTAssertTrue(script.contains("CODEXBAR_DESKTOP_PROBE_RUN_ID"))
+        XCTAssertTrue(script.contains(codexAppURL.appendingPathComponent("Contents/Resources/codex").path))
+
+        let stateData = try Data(contentsOf: CodexPaths.managedLaunchStateURL)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        XCTAssertEqual(try decoder.decode(CodexDesktopLaunchProbeState.self, from: stateData), state)
+    }
+
+    func testLaunchProbeFailsWhenCodexAppCannotBeLocated() async throws {
+        let service = CodexDesktopLaunchProbeService(
+            locateCodexApp: { nil },
+            launchApp: { _, _ in
+                XCTFail("launch should not run")
+                return nil
+            }
+        )
+
+        await XCTAssertThrowsErrorAsync(try await service.launchProbe()) { error in
+            XCTAssertEqual(
+                error.localizedDescription,
+                CodexDesktopLaunchProbeError.codexAppNotFound.localizedDescription
+            )
+        }
+    }
+
+    func testLatestHitReadsRecordedHitFile() throws {
+        try CodexPaths.ensureDirectories()
+        let hit = CodexDesktopLaunchProbeHit(
+            runID: "probe-run",
+            recordedAt: self.date("2026-04-08T01:31:00Z"),
+            argc: 2
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(hit)
+        try CodexPaths.writeSecureFile(
+            data,
+            to: CodexPaths.managedLaunchHitsURL.appendingPathComponent("probe-run.json")
+        )
+
+        let service = CodexDesktopLaunchProbeService(
+            locateCodexApp: { nil },
+            launchApp: { _, _ in nil }
+        )
+
+        XCTAssertEqual(service.hit(for: "probe-run"), hit)
+        XCTAssertEqual(service.latestHit(), hit)
+    }
+
+    func testLaunchNewInstancePassesEnvironmentWithoutProbeKeys() async throws {
+        let codexAppURL = try self.makeFakeCodexApp()
+        var capturedEnvironment: [String: String] = [:]
+
+        let service = CodexDesktopLaunchProbeService(
+            locateCodexApp: { codexAppURL },
+            launchApp: { _, environment in
+                capturedEnvironment = environment
+                return nil
+            },
+            environment: [
+                "PATH": "/usr/bin:/bin",
+                "CODEXBAR_DESKTOP_PROBE_RUN_ID": "old-run",
+                "CODEXBAR_DESKTOP_PROBE_HITS_DIR": "/tmp/old-hits",
+            ]
+        )
+
+        try await service.launchNewInstance()
+
+        XCTAssertEqual(capturedEnvironment["PATH"], "/usr/bin:/bin")
+        XCTAssertNil(capturedEnvironment["CODEXBAR_DESKTOP_PROBE_RUN_ID"])
+        XCTAssertNil(capturedEnvironment["CODEXBAR_DESKTOP_PROBE_HITS_DIR"])
+    }
+
+    private func makeFakeCodexApp() throws -> URL {
+        let appURL = CodexPaths.realHome.appendingPathComponent("Codex.app", isDirectory: true)
+        let resourcesURL = appURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("Resources", isDirectory: true)
+        try FileManager.default.createDirectory(at: resourcesURL, withIntermediateDirectories: true)
+        let executableURL = resourcesURL.appendingPathComponent("codex")
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: executableURL, options: .atomic)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o755))],
+            ofItemAtPath: executableURL.path
+        )
+        return appURL
+    }
+
+    private func date(_ value: String) -> Date {
+        ISO8601DateFormatter().date(from: value)!
+    }
+}
+
+@MainActor
+private func XCTAssertThrowsErrorAsync<T>(
+    _ expression: @autoclosure () async throws -> T,
+    _ errorHandler: (Error) -> Void
+) async {
+    do {
+        _ = try await expression()
+        XCTFail("Expected expression to throw")
+    } catch {
+        errorHandler(error)
+    }
+}

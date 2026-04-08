@@ -129,7 +129,7 @@ final class AutoRoutingCoordinatorTests: CodexBarTestCase {
         XCTAssertEqual(best?.accountId, "acct_healthy")
     }
 
-    func testHandleAppLaunchPromotesHealthierAccountWhenCurrentIsDegraded() async throws {
+    func testHandleAppLaunchDoesNotAutoSwitchWhenCurrentIsDegraded() async throws {
         let accounts = [
             self.makeAccount(accountId: "acct_active", primaryUsedPercent: 80, secondaryUsedPercent: 20),
             self.makeAccount(accountId: "acct_better", primaryUsedPercent: 15, secondaryUsedPercent: 10),
@@ -150,7 +150,7 @@ final class AutoRoutingCoordinatorTests: CodexBarTestCase {
         await coordinator.handleAppLaunch()
 
         let active = await MainActor.run { TokenStore.shared.activeAccount()?.accountId }
-        XCTAssertEqual(active, "acct_better")
+        XCTAssertEqual(active, "acct_active")
     }
 
     func testHandleAppLaunchDoesNotSwitchWhenDisabled() async throws {
@@ -199,7 +199,7 @@ final class AutoRoutingCoordinatorTests: CodexBarTestCase {
         XCTAssertEqual(try self.switchJournalEntries().count, initialJournalCount)
     }
 
-    func testHandlePostActiveAccountRefreshFailsOverWhenActiveBecomesUnavailable() async throws {
+    func testHandlePostActiveAccountRefreshDoesNotAutoFailOverWhenActiveBecomesUnavailable() async throws {
         let accounts = [
             self.makeAccount(accountId: "acct_active", primaryUsedPercent: 30, secondaryUsedPercent: 20, tokenExpired: true),
             self.makeAccount(accountId: "acct_fallback", primaryUsedPercent: 10, secondaryUsedPercent: 10),
@@ -220,7 +220,7 @@ final class AutoRoutingCoordinatorTests: CodexBarTestCase {
         await coordinator.handlePostActiveAccountRefresh(accountID: "acct_active")
 
         let active = await MainActor.run { TokenStore.shared.activeAccount()?.accountId }
-        XCTAssertEqual(active, "acct_fallback")
+        XCTAssertEqual(active, "acct_active")
     }
 
     func testHandleUsageSnapshotChangedIgnoresCustomProviderSelections() async throws {
