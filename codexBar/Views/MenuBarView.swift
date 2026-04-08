@@ -253,7 +253,6 @@ struct MenuBarView: View {
     @EnvironmentObject var oauth: OAuthManager
 
     private let costPanelID = "cost-details-hover-panel"
-    private let configUpdateSuccessMessage = "Updated Codex configuration. Changes apply to new sessions."
     private let usageRefreshInterval = OpenAIUsagePollingService.defaultRefreshInterval
     private let visibleOpenAIAccountLimit = 5
     private let openAIAccountsInitialHeight: CGFloat = 260
@@ -265,7 +264,6 @@ struct MenuBarView: View {
 
     @State private var isRefreshing = false
     @State private var showError: String?
-    @State private var showSuccess: String?
     @State private var now = Date()
     @State private var runningThreadAttribution = OpenAIRunningThreadAttribution.empty
     @State private var runningThreadAttributionRefreshSequence = 0
@@ -343,11 +341,6 @@ struct MenuBarView: View {
         return max(260, visibleHeight - 40)
     }
 
-    private var lowerSuccessMessage: String? {
-        guard let showSuccess else { return nil }
-        return showSuccess == configUpdateSuccessMessage ? nil : showSuccess
-    }
-
     private var currentAutoRoutingDecision: AutoRoutingPolicy.Decision? {
         guard self.store.config.autoRouting.enabled else { return nil }
         guard self.store.activeProvider?.kind == .openAIOAuth else { return nil }
@@ -376,13 +369,11 @@ struct MenuBarView: View {
             guard isCostPanelPresented else { return }
             showCostPanel()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .openAILoginDidSucceed)) { notification in
+        .onReceive(NotificationCenter.default.publisher(for: .openAILoginDidSucceed)) { _ in
             showError = nil
-            showSuccess = notification.userInfo?["message"] as? String ?? "Saved OpenAI account."
             refreshRunningThreadAttribution()
         }
         .onReceive(NotificationCenter.default.publisher(for: .openAILoginDidFail)) { notification in
-            showSuccess = nil
             showError = notification.userInfo?["message"] as? String ?? "OpenAI login failed."
         }
         .onAppear {
@@ -393,6 +384,7 @@ struct MenuBarView: View {
             store.markActiveAccount()
             isProvidersExpanded = false
             refreshRunningThreadAttribution()
+            triggerRefreshOnOpenIfNeeded()
         }
         .onDisappear {
             runningThreadAttributionRefreshSequence += 1
@@ -472,7 +464,7 @@ struct MenuBarView: View {
             if let nextUseProviderAccount {
                 Divider()
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(L.nextUseTitle) · OpenAI · \(nextUseProviderAccount.label)")
+                    Text("OpenAI · \(nextUseProviderAccount.label)")
                         .font(.system(size: 11, weight: .medium))
                     Text(nextUseSummaryDetail)
                         .font(.system(size: 10))
@@ -534,19 +526,6 @@ struct MenuBarView: View {
 
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-            }
-
-            if let success = lowerSuccessMessage {
-                Divider()
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                    Text(success)
-                        .font(.caption)
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
                 .padding(.vertical, 6)
             }
 
@@ -925,7 +904,7 @@ struct MenuBarView: View {
             )
             self.store.refreshLocalCostSummary()
             self.refreshRunningThreadAttribution()
-            self.showSuccess = L.codexLaunchSwitchedInstanceStarted(account.email)
+            self.showError = nil
             Task { @MainActor in
                 OpenAIUsagePollingService.shared.refreshNow()
             }
@@ -938,7 +917,7 @@ struct MenuBarView: View {
         do {
             try store.activateCustomProvider(providerID: providerID, accountID: accountID)
             store.refreshLocalCostSummary()
-            showSuccess = configUpdateSuccessMessage
+            showError = nil
         } catch {
             showError = error.localizedDescription
         }
@@ -947,7 +926,7 @@ struct MenuBarView: View {
     private func deleteCompatibleAccount(providerID: String, accountID: String) {
         do {
             try store.removeCustomProviderAccount(providerID: providerID, accountID: accountID)
-            showSuccess = "Removed provider account."
+            showError = nil
         } catch {
             showError = error.localizedDescription
         }
@@ -956,7 +935,7 @@ struct MenuBarView: View {
     private func deleteProvider(providerID: String) {
         do {
             try store.removeCustomProvider(providerID: providerID)
-            showSuccess = "Removed provider."
+            showError = nil
         } catch {
             showError = error.localizedDescription
         }
@@ -970,7 +949,6 @@ struct MenuBarView: View {
         do {
             let accounts = try self.oauthAccountService.exportAccounts()
             guard accounts.isEmpty == false else {
-                self.showSuccess = nil
                 self.showError = L.noOpenAIAccountsToExport
                 return
             }
@@ -982,9 +960,7 @@ struct MenuBarView: View {
             let csv = self.openAIAccountCSVService.makeCSV(from: accounts)
             try csv.write(to: exportURL, atomically: true, encoding: .utf8)
             self.showError = nil
-            self.showSuccess = L.openAICSVExportSucceeded(accounts.count)
         } catch {
-            self.showSuccess = nil
             self.showError = error.localizedDescription
         }
     }
@@ -1006,16 +982,8 @@ struct MenuBarView: View {
             self.store.refreshLocalCostSummary()
             self.refreshRunningThreadAttribution()
             self.showError = nil
-            self.showSuccess = L.openAICSVImportSucceeded(
-                added: result.addedCount,
-                updated: result.updatedCount,
-                activeChanged: result.activeChanged,
-                providerChanged: result.providerChanged,
-                preservedCompatibleProvider: result.preservedCompatibleProvider
-            )
             self.refreshImportedAccounts(accountIDs: result.importedAccountIDs)
         } catch {
-            self.showSuccess = nil
             self.showError = error.localizedDescription
         }
     }
@@ -1029,7 +997,7 @@ struct MenuBarView: View {
             AddProviderSheet { label, baseURL, accountLabel, apiKey in
                 do {
                     try store.addCustomProvider(label: label, baseURL: baseURL, accountLabel: accountLabel, apiKey: apiKey)
-                    showSuccess = configUpdateSuccessMessage
+                    showError = nil
                     DetachedWindowPresenter.shared.close(id: "add-provider")
                 } catch {
                     showError = error.localizedDescription
@@ -1049,7 +1017,7 @@ struct MenuBarView: View {
             AddProviderAccountSheet(provider: provider) { label, apiKey in
                 do {
                     try store.addCustomProviderAccount(providerID: provider.id, label: label, apiKey: apiKey)
-                    showSuccess = "Saved provider account."
+                    showError = nil
                     DetachedWindowPresenter.shared.close(id: "add-provider-account-\(provider.id)")
                 } catch {
                     showError = error.localizedDescription
@@ -1108,9 +1076,7 @@ struct MenuBarView: View {
                     await AutoRoutingCoordinator.shared.handleAccountInventoryChanged()
                     refreshRunningThreadAttribution()
                 }
-                showSuccess = completion.active
-                    ? configUpdateSuccessMessage
-                    : "Saved OpenAI account."
+                showError = nil
             case .failure(let error):
                 showError = error.localizedDescription
             }
@@ -1238,9 +1204,7 @@ struct MenuBarView: View {
                 self.store.refreshLocalCostSummary()
                 self.refreshRunningThreadAttribution()
                 self.showError = nil
-                self.showSuccess = L.autoSwitchBody(fromLabel, toLabel)
             } catch {
-                self.showSuccess = nil
                 self.showError = error.localizedDescription
                 self.autoRoutingPromptSuppressedKey = nil
             }
