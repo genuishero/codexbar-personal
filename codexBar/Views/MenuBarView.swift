@@ -257,7 +257,7 @@ struct MenuBarView: View {
     private let usageRefreshInterval = OpenAIUsagePollingService.defaultRefreshInterval
     private let visibleOpenAIAccountLimit = 5
     private let openAIAccountsInitialHeight: CGFloat = 260
-    private let sessionAttributionService = OpenAILiveSessionAttributionService()
+    private let runningThreadAttributionService = OpenAIRunningThreadAttributionService()
     private let oauthAccountService = CodexBarOAuthAccountService()
     private let openAIAccountCSVService = OpenAIAccountCSVService()
     private let openAIAccountCSVPanelService = OpenAIAccountCSVPanelService()
@@ -266,8 +266,8 @@ struct MenuBarView: View {
     @State private var showError: String?
     @State private var showSuccess: String?
     @State private var now = Date()
-    @State private var sessionAttribution = OpenAILiveSessionAttribution.empty
-    @State private var sessionAttributionRefreshSequence = 0
+    @State private var runningThreadAttribution = OpenAIRunningThreadAttribution.empty
+    @State private var runningThreadAttributionRefreshSequence = 0
     @State private var refreshingAccounts: Set<String> = []
     @State private var languageToggle = false
     @State private var isCostSummaryHovered = false
@@ -278,8 +278,10 @@ struct MenuBarView: View {
     @State private var costSummaryAnchorView: NSView?
     @State private var isProvidersExpanded = false
     @State private var countdownTimerConnection: Cancellable?
+    @State private var runningThreadTimerConnection: Cancellable?
 
     private let countdownTimer = Timer.publish(every: 10, on: .main, in: .common)
+    private let runningThreadTimer = Timer.publish(every: 1, on: .main, in: .common)
     private static let currencyFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
@@ -297,12 +299,12 @@ struct MenuBarView: View {
     private var groupedAccounts: [OpenAIAccountGroup] {
         OpenAIAccountListLayout.groupedAccounts(
             from: store.accounts,
-            summary: self.liveSessionSummary
+            summary: self.runningThreadSummary
         )
     }
 
-    private var liveSessionSummary: OpenAILiveSessionAttribution.LiveSummary {
-        self.sessionAttribution.liveSummary(now: self.now)
+    private var runningThreadSummary: OpenAIRunningThreadAttribution.Summary {
+        self.runningThreadAttribution.summary
     }
 
     private var visibleGroupedAccounts: [OpenAIAccountGroup] {
@@ -322,8 +324,10 @@ struct MenuBarView: View {
     }
 
     private var nextUseSummaryDetail: String {
-        let inUseSummary = OpenAIAccountPresentation.inUseSummaryText(summary: self.liveSessionSummary)
-        return "\(inUseSummary) · Model: \(store.activeModel)"
+        let runningThreadSummary = OpenAIAccountPresentation.runningThreadSummaryText(
+            summary: self.runningThreadSummary
+        )
+        return "\(runningThreadSummary) · Model: \(store.activeModel)"
     }
 
     private var isCompletelyEmpty: Bool {
@@ -347,6 +351,9 @@ struct MenuBarView: View {
         .onReceive(countdownTimer) { _ in
             now = Date()
         }
+        .onReceive(runningThreadTimer) { _ in
+            refreshRunningThreadAttribution()
+        }
         .onReceive(store.$localCostSummary) { _ in
             guard isCostPanelPresented else { return }
             showCostPanel()
@@ -354,7 +361,7 @@ struct MenuBarView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openAILoginDidSucceed)) { notification in
             showError = nil
             showSuccess = notification.userInfo?["message"] as? String ?? "Saved OpenAI account."
-            refreshSessionAttribution()
+            refreshRunningThreadAttribution()
         }
         .onReceive(NotificationCenter.default.publisher(for: .openAILoginDidFail)) { notification in
             showSuccess = nil
@@ -363,14 +370,18 @@ struct MenuBarView: View {
         .onAppear {
             countdownTimerConnection?.cancel()
             countdownTimerConnection = countdownTimer.connect()
+            runningThreadTimerConnection?.cancel()
+            runningThreadTimerConnection = runningThreadTimer.connect()
             store.markActiveAccount()
             isProvidersExpanded = false
-            refreshSessionAttribution()
+            refreshRunningThreadAttribution()
         }
         .onDisappear {
-            sessionAttributionRefreshSequence += 1
+            runningThreadAttributionRefreshSequence += 1
             countdownTimerConnection?.cancel()
             countdownTimerConnection = nil
+            runningThreadTimerConnection?.cancel()
+            runningThreadTimerConnection = nil
             didTriggerOpenRefresh = false
             pendingCostHide?.cancel()
             pendingCostHide = nil
@@ -564,12 +575,12 @@ struct MenuBarView: View {
                         importOpenAIAccountsCSV()
                     }
                 } label: {
-                    Image(systemName: "arrow.up.arrow.down.circle")
+                    Image(systemName: OpenAIAccountCSVToolbarUI.symbolName)
                         .font(.system(size: 12))
                 }
                 .menuStyle(.borderlessButton)
                 .accessibilityLabel(L.openAICSVToolbar)
-                .accessibilityIdentifier("codexbar.openai-csv.toolbar")
+                .accessibilityIdentifier(OpenAIAccountCSVToolbarUI.accessibilityIdentifier)
                 .help(L.openAICSVToolbar)
 
                 Button {
@@ -747,13 +758,12 @@ struct MenuBarView: View {
                     ForEach(group.accounts) { account in
                         let rowState = OpenAIAccountPresentation.rowState(
                             for: account,
-                            summary: self.liveSessionSummary
+                            summary: self.runningThreadSummary
                         )
                         AccountRowView(
                             account: account,
                             isNextUseTarget: rowState.isNextUseTarget,
-                            inUseSessionCount: rowState.inUseSessionCount,
-                            now: now,
+                            runningThreadCount: rowState.runningThreadCount,
                             isRefreshing: refreshingAccounts.contains(account.id)
                         ) {
                             activateAccount(account)
@@ -890,7 +900,7 @@ struct MenuBarView: View {
         do {
             try store.activate(account)
             store.refreshLocalCostSummary()
-            refreshSessionAttribution()
+            refreshRunningThreadAttribution()
             showSuccess = configUpdateSuccessMessage
             Task { @MainActor in
                 OpenAIUsagePollingService.shared.refreshNow()
@@ -970,7 +980,7 @@ struct MenuBarView: View {
 
             self.store.load()
             self.store.refreshLocalCostSummary()
-            self.refreshSessionAttribution()
+            self.refreshRunningThreadAttribution()
             self.showError = nil
             self.showSuccess = L.openAICSVImportSucceeded(
                 added: result.addedCount,
@@ -1047,7 +1057,7 @@ struct MenuBarView: View {
         let outcomes = await WhamService.shared.refreshAll(store: store)
         await AutoRoutingCoordinator.shared.handleUsageSnapshotChanged()
         store.refreshLocalCostSummary()
-        refreshSessionAttribution()
+        refreshRunningThreadAttribution()
         if announceResult, let message = self.refreshFailureMessage(from: outcomes) {
             showError = message
         }
@@ -1058,7 +1068,7 @@ struct MenuBarView: View {
         let outcome = await WhamService.shared.refreshOne(account: account, store: store)
         refreshingAccounts.remove(account.id)
         await AutoRoutingCoordinator.shared.handleUsageSnapshotChanged()
-        refreshSessionAttribution()
+        refreshRunningThreadAttribution()
         if announceResult, let message = self.refreshFailureMessage(for: account, outcome: outcome) {
             showError = message
         }
@@ -1072,7 +1082,7 @@ struct MenuBarView: View {
                 Task {
                     await WhamService.shared.refreshOne(account: completion.account, store: store)
                     await AutoRoutingCoordinator.shared.handleAccountInventoryChanged()
-                    refreshSessionAttribution()
+                    refreshRunningThreadAttribution()
                 }
                 showSuccess = completion.active
                     ? configUpdateSuccessMessage
@@ -1117,20 +1127,20 @@ struct MenuBarView: View {
         }
     }
 
-    private func refreshSessionAttribution() {
-        // Session log scans can be expensive on large local history pools.
-        // Keep menu presentation responsive by resolving attribution off-main.
-        self.sessionAttributionRefreshSequence += 1
-        let sequence = self.sessionAttributionRefreshSequence
-        let now = self.now
-        let service = self.sessionAttributionService
+    private func refreshRunningThreadAttribution() {
+        // Runtime sqlite scans stay off-main so the menu keeps responding while
+        // polling short-window thread activity from Codex App / CLI / subagents.
+        self.runningThreadAttributionRefreshSequence += 1
+        let sequence = self.runningThreadAttributionRefreshSequence
+        let now = Date()
+        let service = self.runningThreadAttributionService
 
         DispatchQueue.global(qos: .utility).async {
             let attribution = service.load(now: now)
 
             DispatchQueue.main.async {
-                guard sequence == self.sessionAttributionRefreshSequence else { return }
-                self.sessionAttribution = attribution
+                guard sequence == self.runningThreadAttributionRefreshSequence else { return }
+                self.runningThreadAttribution = attribution
             }
         }
     }

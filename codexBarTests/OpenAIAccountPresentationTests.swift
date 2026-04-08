@@ -19,12 +19,12 @@ final class OpenAIAccountPresentationTests: XCTestCase {
 
         let state = OpenAIAccountPresentation.rowState(
             for: account,
-            attribution: .empty
+            summary: OpenAIRunningThreadAttribution.Summary.empty
         )
 
         XCTAssertTrue(state.showsUseAction)
         XCTAssertEqual(state.useActionTitle, "Use")
-        XCTAssertNil(state.inUseBadgeTitle)
+        XCTAssertNil(state.runningThreadBadgeTitle)
     }
 
     func testRowStateShowsSelectedNextUseStateWithoutUseAction() {
@@ -32,49 +32,73 @@ final class OpenAIAccountPresentationTests: XCTestCase {
 
         let state = OpenAIAccountPresentation.rowState(
             for: account,
-            attribution: .empty
+            summary: OpenAIRunningThreadAttribution.Summary.empty
         )
 
         XCTAssertTrue(state.isNextUseTarget)
         XCTAssertFalse(state.showsUseAction)
     }
 
-    func testRowStateShowsInUseBadgeWhenSessionsAreAttributed() {
+    func testRowStateShowsRunningThreadBadgeWhenThreadsAreAttributed() {
         let account = self.makeAccount(accountId: "acct_busy", isActive: false)
-        let attribution = OpenAILiveSessionAttribution(
-            sessions: [],
-            inUseSessionCounts: ["acct_busy": 2],
-            unknownSessionCount: 0,
-            recentActivityWindow: OpenAILiveSessionAttributionService.defaultRecentActivityWindow
+        let summary = OpenAIRunningThreadAttribution.Summary(
+            availability: .available,
+            runningThreadCounts: ["acct_busy": 2],
+            unknownThreadCount: 0
         )
 
         let state = OpenAIAccountPresentation.rowState(
             for: account,
-            attribution: attribution
+            summary: summary
         )
 
-        XCTAssertEqual(state.inUseSessionCount, 2)
-        XCTAssertEqual(state.inUseBadgeTitle, "In Use · 2 sessions")
+        XCTAssertEqual(state.runningThreadCount, 2)
+        XCTAssertEqual(state.runningThreadBadgeTitle, "Running · 2 threads")
     }
 
-    func testNextUseAndInUseCanCoexistOnSameAccount() {
+    func testNextUseAndRunningThreadsCanCoexistOnSameAccount() {
         let account = self.makeAccount(accountId: "acct_dual", isActive: true)
-        let attribution = OpenAILiveSessionAttribution(
-            sessions: [],
-            inUseSessionCounts: ["acct_dual": 2],
-            unknownSessionCount: 0,
-            recentActivityWindow: OpenAILiveSessionAttributionService.defaultRecentActivityWindow
+        let summary = OpenAIRunningThreadAttribution.Summary(
+            availability: .available,
+            runningThreadCounts: ["acct_dual": 2],
+            unknownThreadCount: 0
         )
 
         let state = OpenAIAccountPresentation.rowState(
             for: account,
-            attribution: attribution
+            summary: summary
         )
 
         XCTAssertTrue(state.isNextUseTarget)
-        XCTAssertEqual(state.inUseSessionCount, 2)
+        XCTAssertEqual(state.runningThreadCount, 2)
         XCTAssertFalse(state.showsUseAction)
-        XCTAssertEqual(state.inUseBadgeTitle, "In Use · 2 sessions")
+        XCTAssertEqual(state.runningThreadBadgeTitle, "Running · 2 threads")
+    }
+
+    func testUnavailableSummaryHidesBadgeAndShowsUnavailableText() {
+        let account = self.makeAccount(accountId: "acct_busy", isActive: false)
+
+        let state = OpenAIAccountPresentation.rowState(
+            for: account,
+            summary: .unavailable
+        )
+        let summaryText = OpenAIAccountPresentation.runningThreadSummaryText(summary: .unavailable)
+
+        XCTAssertEqual(state.runningThreadCount, 0)
+        XCTAssertNil(state.runningThreadBadgeTitle)
+        XCTAssertEqual(summaryText, "Running status unavailable")
+    }
+
+    func testSummaryTextIncludesUnattributedRunningThreads() {
+        let summary = OpenAIRunningThreadAttribution.Summary(
+            availability: .available,
+            runningThreadCounts: ["acct_busy": 2],
+            unknownThreadCount: 1
+        )
+
+        let text = OpenAIAccountPresentation.runningThreadSummaryText(summary: summary)
+
+        XCTAssertEqual(text, "Running · 3 threads / 1 account · 1 unattributed thread")
     }
 
     private func makeAccount(accountId: String, isActive: Bool) -> TokenAccount {

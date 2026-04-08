@@ -118,6 +118,40 @@ final class OpenAISessionAttributionServiceTests: CodexBarTestCase {
         XCTAssertEqual(attribution.sessions.count, 2)
     }
 
+    func testLiveSummaryExpiresSessionsAfterActivityWindow() {
+        let attribution = OpenAILiveSessionAttribution(
+            sessions: [
+                .init(
+                    sessionID: "fresh-attributed",
+                    startedAt: self.date("2026-04-05T10:00:00Z"),
+                    lastActivityAt: self.date("2026-04-05T11:40:00Z"),
+                    accountID: "acct_a"
+                ),
+                .init(
+                    sessionID: "fresh-unknown",
+                    startedAt: self.date("2026-04-05T10:10:00Z"),
+                    lastActivityAt: self.date("2026-04-05T11:55:00Z"),
+                    accountID: nil
+                ),
+                .init(
+                    sessionID: "expired",
+                    startedAt: self.date("2026-04-05T09:00:00Z"),
+                    lastActivityAt: self.date("2026-04-05T10:30:00Z"),
+                    accountID: "acct_a"
+                ),
+            ],
+            inUseSessionCounts: ["acct_a": 2],
+            unknownSessionCount: 1,
+            recentActivityWindow: OpenAILiveSessionAttributionService.defaultRecentActivityWindow
+        )
+
+        let summary = attribution.liveSummary(now: self.date("2026-04-05T12:00:00Z"))
+
+        XCTAssertEqual(summary.inUseSessionCount(for: "acct_a"), 1)
+        XCTAssertEqual(summary.totalInUseSessionCount, 1)
+        XCTAssertEqual(summary.unknownSessionCount, 1)
+    }
+
     private func makeCodexHome() throws -> URL {
         let home = try XCTUnwrap(self.temporaryHomeURL())
         try FileManager.default.createDirectory(

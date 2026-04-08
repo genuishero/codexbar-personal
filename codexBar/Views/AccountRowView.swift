@@ -4,8 +4,7 @@ import SwiftUI
 struct AccountRowView: View {
     let account: TokenAccount
     let isNextUseTarget: Bool
-    let inUseSessionCount: Int
-    let now: Date
+    let runningThreadCount: Int
     let isRefreshing: Bool
     let onActivate: () -> Void
     let onRefresh: () -> Void
@@ -15,7 +14,7 @@ struct AccountRowView: View {
     private var rowState: OpenAIAccountRowState {
         OpenAIAccountRowState(
             isNextUseTarget: self.isNextUseTarget,
-            inUseSessionCount: self.inUseSessionCount
+            runningThreadCount: self.runningThreadCount
         )
     }
 
@@ -35,8 +34,8 @@ struct AccountRowView: View {
 
             usageSummary
 
-            if let inUseBadgeTitle = rowState.inUseBadgeTitle {
-                Text(inUseBadgeTitle)
+            if let runningThreadBadgeTitle = rowState.runningThreadBadgeTitle {
+                Text(runningThreadBadgeTitle)
                     .font(.system(size: 9, weight: .medium))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)

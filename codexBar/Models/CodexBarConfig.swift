@@ -348,6 +348,18 @@ extension CodexBarConfig {
         return stored
     }
 
+    mutating func setOAuthPreferredAccount(accountID: String) throws {
+        guard var provider = self.oauthProvider() else {
+            throw TokenStoreError.providerNotFound
+        }
+        guard let stored = provider.accounts.first(where: { $0.id == accountID || $0.openAIAccountId == accountID }) else {
+            throw TokenStoreError.accountNotFound
+        }
+
+        provider.activeAccountId = stored.id
+        self.upsertProvider(provider)
+    }
+
     func oauthTokenAccounts() -> [TokenAccount] {
         guard let provider = self.oauthProvider() else { return [] }
         let isOAuthActive = self.active.providerId == provider.id

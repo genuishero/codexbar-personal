@@ -24,6 +24,8 @@ enum CodexPaths {
     static var tokenPoolURL: URL { self.codexRoot.appendingPathComponent("token_pool.json") }
     static var configTomlURL: URL { self.codexRoot.appendingPathComponent("config.toml") }
     static var providerSecretsURL: URL { self.codexRoot.appendingPathComponent("provider-secrets.env") }
+    static var stateSQLiteURL: URL { self.codexRoot.appendingPathComponent("state_5.sqlite") }
+    static var logsSQLiteURL: URL { self.codexRoot.appendingPathComponent("logs_1.sqlite") }
     static var oauthFlowsDirectoryURL: URL { self.codexBarRoot.appendingPathComponent("oauth-flows", isDirectory: true) }
 
     static var barConfigURL: URL { self.codexBarRoot.appendingPathComponent("config.json") }

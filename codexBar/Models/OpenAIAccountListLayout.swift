@@ -44,18 +44,49 @@ enum OpenAIAccountListLayout {
 
     nonisolated static func groupedAccounts(
         from accounts: [TokenAccount],
-        attribution: OpenAILiveSessionAttribution
+        attribution: OpenAILiveSessionAttribution,
+        now: Date = Date()
+    ) -> [OpenAIAccountGroup] {
+        self.groupedAccounts(
+            from: accounts,
+            prioritizedAccountIDs: Set(attribution.liveSummary(now: now).inUseSessionCounts.keys)
+        )
+    }
+
+    nonisolated static func groupedAccounts(
+        from accounts: [TokenAccount],
+        attribution: OpenAIRunningThreadAttribution
+    ) -> [OpenAIAccountGroup] {
+        self.groupedAccounts(
+            from: accounts,
+            prioritizedAccountIDs: Set(attribution.summary.runningThreadCounts.keys)
+        )
+    }
+
+    nonisolated static func groupedAccounts(
+        from accounts: [TokenAccount],
+        summary: OpenAIRunningThreadAttribution.Summary
+    ) -> [OpenAIAccountGroup] {
+        self.groupedAccounts(
+            from: accounts,
+            prioritizedAccountIDs: Set(summary.runningThreadCounts.keys)
+        )
+    }
+
+    nonisolated private static func groupedAccounts(
+        from accounts: [TokenAccount],
+        prioritizedAccountIDs: Set<String>
     ) -> [OpenAIAccountGroup] {
         Dictionary(grouping: accounts, by: \.email)
             .map { email, groupedAccounts in
                 OpenAIAccountGroup(
                     email: email,
                     accounts: groupedAccounts.sorted {
-                        self.displayAccountPrecedes($0, $1, attribution: attribution)
+                        self.displayAccountPrecedes($0, $1, prioritizedAccountIDs: prioritizedAccountIDs)
                     }
                 )
             }
-            .sorted { self.displayGroupPrecedes($0, $1, attribution: attribution) }
+            .sorted { self.displayGroupPrecedes($0, $1, prioritizedAccountIDs: prioritizedAccountIDs) }
     }
 
     nonisolated static func visibleGroups(
@@ -102,10 +133,10 @@ enum OpenAIAccountListLayout {
     nonisolated private static func displayAccountPrecedes(
         _ lhs: TokenAccount,
         _ rhs: TokenAccount,
-        attribution: OpenAILiveSessionAttribution
+        prioritizedAccountIDs: Set<String>
     ) -> Bool {
-        let lhsPriority = self.displayPriority(for: lhs, attribution: attribution)
-        let rhsPriority = self.displayPriority(for: rhs, attribution: attribution)
+        let lhsPriority = self.displayPriority(for: lhs, prioritizedAccountIDs: prioritizedAccountIDs)
+        let rhsPriority = self.displayPriority(for: rhs, prioritizedAccountIDs: prioritizedAccountIDs)
         if lhsPriority != rhsPriority {
             return lhsPriority.rawValue < rhsPriority.rawValue
         }
@@ -115,9 +146,9 @@ enum OpenAIAccountListLayout {
 
     nonisolated private static func displayPriority(
         for account: TokenAccount,
-        attribution: OpenAILiveSessionAttribution
+        prioritizedAccountIDs: Set<String>
     ) -> OpenAIAccountDisplayPriority {
-        if account.isActive || attribution.inUseSessionCount(for: account.accountId) > 0 {
+        if account.isActive || prioritizedAccountIDs.contains(account.accountId) {
             return .prioritized
         }
         return .standard
@@ -149,17 +180,17 @@ enum OpenAIAccountListLayout {
     nonisolated private static func displayGroupPrecedes(
         _ lhs: OpenAIAccountGroup,
         _ rhs: OpenAIAccountGroup,
-        attribution: OpenAILiveSessionAttribution
+        prioritizedAccountIDs: Set<String>
     ) -> Bool {
         let lhsRepresentative = lhs.accounts.first
         let rhsRepresentative = rhs.accounts.first
 
         switch (lhsRepresentative, rhsRepresentative) {
         case let (lhsAccount?, rhsAccount?):
-            if self.displayAccountPrecedes(lhsAccount, rhsAccount, attribution: attribution) {
+            if self.displayAccountPrecedes(lhsAccount, rhsAccount, prioritizedAccountIDs: prioritizedAccountIDs) {
                 return true
             }
-            if self.displayAccountPrecedes(rhsAccount, lhsAccount, attribution: attribution) {
+            if self.displayAccountPrecedes(rhsAccount, lhsAccount, prioritizedAccountIDs: prioritizedAccountIDs) {
                 return false
             }
         case (.some, nil):

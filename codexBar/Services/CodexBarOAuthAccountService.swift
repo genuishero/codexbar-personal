@@ -30,12 +30,12 @@ struct OAuthAccountBatchImportResult: Equatable {
 
 struct CodexBarOAuthAccountService {
     private let configStore: CodexBarConfigStore
-    private let syncService: CodexSyncService
+    private let syncService: any CodexSynchronizing
     private let switchJournalStore: SwitchJournalStore
 
     init(
         configStore: CodexBarConfigStore = CodexBarConfigStore(),
-        syncService: CodexSyncService = CodexSyncService(),
+        syncService: any CodexSynchronizing = CodexSyncService(),
         switchJournalStore: SwitchJournalStore = SwitchJournalStore()
     ) {
         self.configStore = configStore
@@ -59,14 +59,12 @@ struct CodexBarOAuthAccountService {
     }
 
     func importAccount(_ account: TokenAccount, activate: Bool) throws -> OAuthAccountMutationResult {
-        var config = try self.configStore.loadOrMigrate()
+        let previousConfig = try self.configStore.loadOrMigrate()
+        var config = previousConfig
         let previousAccountID = config.active.accountId
         let result = config.upsertOAuthAccount(account, activate: activate)
 
-        try self.configStore.save(config)
-        if result.syncCodex {
-            try self.syncService.synchronize(config: config)
-        }
+        try self.persist(config: config, previousConfig: previousConfig, synchronizeCodex: result.syncCodex)
         if activate {
             try self.switchJournalStore.appendActivation(
                 providerID: config.active.providerId,
@@ -84,12 +82,12 @@ struct CodexBarOAuthAccountService {
     }
 
     func activateAccount(accountID: String) throws -> OAuthAccountMutationResult {
-        var config = try self.configStore.loadOrMigrate()
+        let previousConfig = try self.configStore.loadOrMigrate()
+        var config = previousConfig
         let previousAccountID = config.active.accountId
         let stored = try config.activateOAuthAccount(accountID: accountID)
 
-        try self.configStore.save(config)
-        try self.syncService.synchronize(config: config)
+        try self.persist(config: config, previousConfig: previousConfig, synchronizeCodex: true)
         try self.switchJournalStore.appendActivation(
             providerID: config.active.providerId,
             accountID: config.active.accountId,
@@ -107,7 +105,8 @@ struct CodexBarOAuthAccountService {
             throw TokenStoreError.accountNotFound
         }
 
-        var config = try self.configStore.loadOrMigrate()
+        let previousConfig = try self.configStore.loadOrMigrate()
+        var config = previousConfig
         let previousProviderID = config.active.providerId
         let previousAccountID = config.active.accountId
         let previousProviderKind = config.activeProvider()?.kind
@@ -132,12 +131,8 @@ struct CodexBarOAuthAccountService {
             }
         }
 
-        try self.configStore.save(config)
-
         let synchronized = self.shouldSynchronize(config: config)
-        if synchronized {
-            try self.syncService.synchronize(config: config)
-        }
+        try self.persist(config: config, previousConfig: previousConfig, synchronizeCodex: synchronized)
 
         let providerChanged = previousProviderID != config.active.providerId
         let activeChanged = previousAccountID != config.active.accountId
@@ -173,5 +168,21 @@ struct CodexBarOAuthAccountService {
             return false
         }
         return true
+    }
+
+    private func persist(
+        config: CodexBarConfig,
+        previousConfig: CodexBarConfig,
+        synchronizeCodex: Bool
+    ) throws {
+        try self.configStore.save(config)
+        guard synchronizeCodex else { return }
+
+        do {
+            try self.syncService.synchronize(config: config)
+        } catch {
+            try? self.configStore.save(previousConfig)
+            throw error
+        }
     }
 }

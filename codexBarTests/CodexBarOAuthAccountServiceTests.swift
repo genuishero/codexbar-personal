@@ -2,6 +2,14 @@ import Foundation
 import XCTest
 
 final class CodexBarOAuthAccountServiceTests: CodexBarTestCase {
+    private struct FailingSyncService: CodexSynchronizing {
+        let error: Error
+
+        func synchronize(config: CodexBarConfig) throws {
+            throw error
+        }
+    }
+
     func testImportActivatedAccountSynchronizesAuthAndConfig() throws {
         let service = CodexBarOAuthAccountService()
         let account = TokenAccount(
@@ -189,5 +197,36 @@ final class CodexBarOAuthAccountServiceTests: CodexBarTestCase {
         let accounts = try service.listAccounts()
         XCTAssertEqual(accounts.first(where: { $0.accountID == "acct_first" })?.active, true)
         XCTAssertEqual(accounts.first(where: { $0.accountID == "acct_second" })?.active, false)
+    }
+
+    func testImportAccountsRollsBackCodexbarConfigWhenSyncFails() throws {
+        let configStore = CodexBarConfigStore()
+        let existing = try self.makeOAuthAccount(accountID: "acct_existing", email: "existing@example.com", isActive: true)
+        let service = CodexBarOAuthAccountService()
+        _ = try service.importAccount(existing, activate: true)
+
+        let before = try configStore.load()
+        let imported = try self.makeOAuthAccount(accountID: "acct_imported", email: "imported@example.com", isActive: true)
+        let failingService = CodexBarOAuthAccountService(
+            configStore: configStore,
+            syncService: FailingSyncService(error: TestFailure.syncFailed),
+            switchJournalStore: SwitchJournalStore()
+        )
+
+        XCTAssertThrowsError(
+            try failingService.importAccounts([existing, imported], activeAccountID: imported.accountId)
+        ) { error in
+            XCTAssertEqual(error as? TestFailure, .syncFailed)
+        }
+
+        let after = try configStore.load()
+        XCTAssertEqual(after.active.providerId, before.active.providerId)
+        XCTAssertEqual(after.active.accountId, before.active.accountId)
+        XCTAssertEqual(after.oauthProvider()?.accounts.count, before.oauthProvider()?.accounts.count)
+        XCTAssertNil(after.oauthProvider()?.accounts.first(where: { $0.openAIAccountId == imported.accountId }))
+    }
+
+    private enum TestFailure: Error, Equatable {
+        case syncFailed
     }
 }

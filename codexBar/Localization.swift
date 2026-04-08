@@ -159,9 +159,15 @@ enum L {
     static var deleteConfirm: String   { zh ? "删除"         : "Delete" }
     static var nextUseTitle: String    { zh ? "下一次使用"   : "Next Use" }
     static var inUseNone: String       { zh ? "未检测到正在使用的 OpenAI 会话" : "No live OpenAI sessions detected" }
+    static var runningThreadNone: String { zh ? "未检测到运行中的 OpenAI 线程" : "No running OpenAI threads detected" }
+    static var runningThreadUnavailable: String { zh ? "运行中状态不可用" : "Running status unavailable" }
 
     static func inUseSessions(_ count: Int) -> String {
         zh ? "使用中 · \(count) 个会话" : "In Use · \(count) session\(count == 1 ? "" : "s")"
+    }
+
+    static func runningThreads(_ count: Int) -> String {
+        zh ? "运行中 · \(count) 个线程" : "Running · \(count) thread\(count == 1 ? "" : "s")"
     }
 
     static func inUseSummary(_ sessions: Int, _ accounts: Int) -> String {
@@ -171,8 +177,19 @@ enum L {
         return "In Use · \(sessions) session\(sessions == 1 ? "" : "s") across \(accounts) account\(accounts == 1 ? "" : "s")"
     }
 
+    static func runningThreadSummary(_ threads: Int, _ accounts: Int) -> String {
+        if zh {
+            return "运行中 · \(threads) 个线程 / \(accounts) 个账号"
+        }
+        return "Running · \(threads) thread\(threads == 1 ? "" : "s") / \(accounts) account\(accounts == 1 ? "" : "s")"
+    }
+
     static func inUseUnknownSessions(_ count: Int) -> String {
         zh ? "另有 \(count) 个未归因会话" : "\(count) unattributed session\(count == 1 ? "" : "s")"
+    }
+
+    static func runningThreadUnknown(_ count: Int) -> String {
+        zh ? "另有 \(count) 个未归因线程" : "\(count) unattributed thread\(count == 1 ? "" : "s")"
     }
 
     static func deletePrompt(_ name: String) -> String {

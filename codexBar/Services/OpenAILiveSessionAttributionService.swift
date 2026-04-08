@@ -8,6 +8,23 @@ struct OpenAILiveSessionAttribution: Equatable {
         let accountID: String?
     }
 
+    struct LiveSummary: Equatable {
+        let inUseSessionCounts: [String: Int]
+        let unknownSessionCount: Int
+
+        nonisolated var inUseAccountCount: Int {
+            self.inUseSessionCounts.count
+        }
+
+        nonisolated var totalInUseSessionCount: Int {
+            self.inUseSessionCounts.values.reduce(0, +)
+        }
+
+        nonisolated func inUseSessionCount(for accountID: String) -> Int {
+            self.inUseSessionCounts[accountID, default: 0]
+        }
+    }
+
     nonisolated static let empty = OpenAILiveSessionAttribution(
         sessions: [],
         inUseSessionCounts: [:],
@@ -30,6 +47,24 @@ struct OpenAILiveSessionAttribution: Equatable {
 
     nonisolated func inUseSessionCount(for accountID: String) -> Int {
         self.inUseSessionCounts[accountID, default: 0]
+    }
+
+    nonisolated func liveSummary(now: Date = Date()) -> LiveSummary {
+        var inUseSessionCounts: [String: Int] = [:]
+        var unknownSessionCount = 0
+
+        for session in self.sessions where max(0, now.timeIntervalSince(session.lastActivityAt)) <= self.recentActivityWindow {
+            if let accountID = session.accountID, accountID.isEmpty == false {
+                inUseSessionCounts[accountID, default: 0] += 1
+            } else {
+                unknownSessionCount += 1
+            }
+        }
+
+        return LiveSummary(
+            inUseSessionCounts: inUseSessionCounts,
+            unknownSessionCount: unknownSessionCount
+        )
     }
 }
 
