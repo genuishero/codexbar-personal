@@ -6,6 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CSV_PATH="$ROOT_DIR/codex.csv"
 IMPORT_SCRIPT="$ROOT_DIR/scripts/import_openai_account_to_codexbar.sh"
 CSV_SHADOW_HELPER="$ROOT_DIR/scripts/codex_csv_shadow.sh"
+CSV_STATE_HELPER="$ROOT_DIR/scripts/codex_csv_state.py"
 EMAIL_FILTER="${EMAIL_FILTER:-}"
 LOGIN_INTERVAL_SECS="${LOGIN_INTERVAL_SECS:-150}"
 RECONCILED_COUNT=0
@@ -26,49 +27,21 @@ cleanup() {
 
 trap cleanup EXIT
 
-update_csv_status() {
-  local email="$1"
-  local password="$2"
-  local status="$3"
-
+csv_upsert_row() {
+  local email="$1" password="$2" status="$3" url="$4" auth_method="$5" phase="$6" failure_category="$7" manual_action="$8"
+  shift 8
   codex_csv_begin_mutation "$CSV_PATH"
-  python3 - "$CSV_PATH" "$email" "$password" "$status" <<'PY'
-import csv
-import sys
-
-path, email, password, status = sys.argv[1:]
-
-with open(path, "r", encoding="utf-8", newline="") as fh:
-    rows = list(csv.reader(fh))
-
-if not rows:
-    rows = [["email", "password", "status", "url"]]
-
-target_index = None
-for idx in range(len(rows) - 1, 0, -1):
-    row = rows[idx]
-    while len(row) < 4:
-        row.append("")
-    if row[0] == email:
-        target_index = idx
-        break
-
-if target_index is None:
-    rows.append([email, password, status, ""])
-else:
-    existing = rows[target_index]
-    while len(existing) < 4:
-        existing.append("")
-    rows[target_index] = [
-        email,
-        password if password else existing[1],
-        status if status else existing[2],
-        existing[3],
-    ]
-
-with open(path, "w", encoding="utf-8", newline="") as fh:
-    csv.writer(fh).writerows(rows)
-PY
+  python3 "$CSV_STATE_HELPER" ensure "$CSV_PATH"
+  python3 "$CSV_STATE_HELPER" upsert "$CSV_PATH" \
+    --email "$email" \
+    --password "$password" \
+    --status "$status" \
+    --url "$url" \
+    --auth-method "$auth_method" \
+    --phase "$phase" \
+    --failure-category "$failure_category" \
+    --manual-action "$manual_action" \
+    "$@"
   codex_csv_sync_shadow "$CSV_PATH"
 }
 
@@ -76,62 +49,8 @@ reconcile_csv_with_codexbar() {
   local reconciled_count=""
 
   codex_csv_begin_mutation "$CSV_PATH"
-  reconciled_count="$(
-    python3 - "$CSV_PATH" "$EMAIL_FILTER" <<'PY'
-import csv
-import json
-import os
-import sys
-
-csv_path, email_filter = sys.argv[1:]
-cfg_path = os.path.expanduser('~/.codexbar/config.json')
-header = ["email", "password", "status", "url"]
-
-if not os.path.exists(csv_path):
-    rows = [header]
-else:
-    with open(csv_path, "r", encoding="utf-8", newline="") as fh:
-        rows = list(csv.reader(fh))
-
-if not rows:
-    rows = [header]
-elif rows[0] == ["email", "password", "status"]:
-    rows[0] = header
-elif rows[0] != header:
-    rows.insert(0, header)
-
-for idx in range(1, len(rows)):
-    while len(rows[idx]) < 4:
-        rows[idx].append("")
-
-with open(cfg_path, "r", encoding="utf-8") as fh:
-    cfg = json.load(fh)
-
-imported = {
-    account.get("email")
-    for provider in cfg.get("providers", [])
-    if provider.get("kind") == "openai_oauth"
-    for account in provider.get("accounts", [])
-}
-
-updated = 0
-for idx in range(1, len(rows)):
-    row = rows[idx]
-    email = row[0]
-    if not email:
-        continue
-    if email_filter and email != email_filter:
-        continue
-    if email in imported and row[2] != "success":
-        row[2] = "success"
-        updated += 1
-
-with open(csv_path, "w", encoding="utf-8", newline="") as fh:
-    csv.writer(fh).writerows(rows)
-
-print(updated)
-PY
-  )"
+  python3 "$CSV_STATE_HELPER" ensure "$CSV_PATH" >/dev/null
+  reconciled_count="$(python3 "$CSV_STATE_HELPER" reconcile-imported "$CSV_PATH" --email-filter "$EMAIL_FILTER")"
   codex_csv_sync_shadow "$CSV_PATH"
 
   RECONCILED_COUNT="${reconciled_count:-0}"
@@ -149,51 +68,15 @@ fi
 
 reconcile_csv_with_codexbar
 
-python3 - "$CSV_PATH" "$EMAIL_FILTER" >"$PENDING_FILE" <<'PY'
-import csv
-import json
-import os
-import sys
-
-csv_path, email_filter = sys.argv[1:]
-cfg_path = os.path.expanduser('~/.codexbar/config.json')
-
-with open(cfg_path, 'r', encoding='utf-8') as fh:
-    cfg = json.load(fh)
-
-imported = {
-    account.get('email')
-    for provider in cfg.get('providers', [])
-    if provider.get('kind') == 'openai_oauth'
-    for account in provider.get('accounts', [])
-}
-
-with open(csv_path, 'r', encoding='utf-8', newline='') as fh:
-    rows = list(csv.DictReader(fh))
-
-for row in rows:
-    email = row.get('email', '')
-    password = row.get('password', '')
-    status = (row.get('status') or '').strip().lower()
-    if not email or not password:
-        continue
-    if email_filter and email != email_filter:
-        continue
-    if status == 'invalid':
-        continue
-    if email in imported:
-        continue
-    print(email)
-    print(password)
-PY
+python3 "$CSV_STATE_HELPER" list-retry-candidates "$CSV_PATH" --email-filter "$EMAIL_FILTER" >"$PENDING_FILE"
 
 readarray -t TARGETS <"$PENDING_FILE"
 
 if (( ${#TARGETS[@]} < 2 )); then
   if [[ -n "$EMAIL_FILTER" ]]; then
-    printf 'no pending Codexbar import account found in %s for %s\n' "$CSV_PATH" "$EMAIL_FILTER"
+    printf 'no auto-retry-eligible Codexbar import account found in %s for %s\n' "$CSV_PATH" "$EMAIL_FILTER"
   else
-    printf 'no pending Codexbar import account found in %s\n' "$CSV_PATH"
+    printf 'no auto-retry-eligible Codexbar import account found in %s\n' "$CSV_PATH"
   fi
   printf 'BATCH_IMPORTED_COUNT=0\n'
   printf 'BATCH_FAILED_COUNT=0\n'
@@ -212,12 +95,22 @@ while (( index < ${#TARGETS[@]} )); do
 
   if output="$(CODEX_CSV_PATH="$CSV_PATH" CODEX_CSV_EMAIL="$email" OPENAI_EMAIL="$email" OPENAI_PASSWORD="$password" "$IMPORT_SCRIPT" 2>&1)"; then
     printf '%s\n' "$output"
-    update_csv_status "$email" "$password" "success"
+    auth_method="$(printf '%s\n' "$output" | sed -n 's/^AUTH_METHOD=//p' | tail -n 1)"
+    last_seen_url_host_path="$(printf '%s\n' "$output" | sed -n 's/^LAST_SEEN_URL_HOST_PATH=//p' | tail -n 1)"
+    csv_upsert_row "$email" "$password" "completed" "${last_seen_url_host_path:-}" "${auth_method:-password}" "import" "" "none" --retry-count 0
     ((IMPORTED_COUNT += 1))
   else
     FAILURE_CATEGORY="$(printf '%s\n' "$output" | sed -n 's/^IMPORT_FAILURE_CATEGORY=//p' | tail -n 1)"
+    WORKFLOW_STATUS="$(printf '%s\n' "$output" | sed -n 's/^WORKFLOW_STATUS=//p' | tail -n 1)"
+    MANUAL_ACTION="$(printf '%s\n' "$output" | sed -n 's/^MANUAL_ACTION=//p' | tail -n 1)"
+    AUTH_METHOD="$(printf '%s\n' "$output" | sed -n 's/^AUTH_METHOD=//p' | tail -n 1)"
+    LAST_SEEN_URL_HOST_PATH="$(printf '%s\n' "$output" | sed -n 's/^LAST_SEEN_URL_HOST_PATH=//p' | tail -n 1)"
     printf '%s\n' "$output" >&2
-    update_csv_status "$email" "$password" "import_failed"
+    if [[ "$WORKFLOW_STATUS" == "retryable_failure" ]]; then
+      csv_upsert_row "$email" "$password" "$WORKFLOW_STATUS" "${LAST_SEEN_URL_HOST_PATH:-}" "${AUTH_METHOD:-password}" "import" "${FAILURE_CATEGORY:-provider_timeout}" "${MANUAL_ACTION:-retry_after_local_fix}" --increment-retry-count
+    else
+      csv_upsert_row "$email" "$password" "${WORKFLOW_STATUS:-manual_required}" "${LAST_SEEN_URL_HOST_PATH:-}" "${AUTH_METHOD:-password}" "import" "${FAILURE_CATEGORY:-provider_timeout}" "${MANUAL_ACTION:-complete_provider_challenge}"
+    fi
     if [[ -n "$FAILURE_CATEGORY" ]]; then
       printf 'IMPORT_FAILURE_CATEGORY=%s\n' "$FAILURE_CATEGORY" >&2
     fi

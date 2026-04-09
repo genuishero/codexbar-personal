@@ -5,16 +5,18 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CODE_SCRIPT="$ROOT_DIR/scripts/get_latest_openai_code.applescript"
 SESSION_RAW="${PLAYWRIGHT_SESSION:-cg$(date +%H%M%S)}"
-ACCOUNT_NAME="${ACCOUNT_NAME:-River Vale}"
-BIRTH_YEAR="${BIRTH_YEAR:-1990}"
-BIRTH_MONTH="${BIRTH_MONTH:-01}"
-BIRTH_DAY="${BIRTH_DAY:-08}"
+ACCOUNT_NAME="${ACCOUNT_NAME:-}"
+BIRTH_YEAR="${BIRTH_YEAR:-}"
+BIRTH_MONTH="${BIRTH_MONTH:-}"
+BIRTH_DAY="${BIRTH_DAY:-}"
 AGE="${AGE:-}"
 RELAY_EMAIL="${RELAY_EMAIL:-}"
 PASSWORD="${PASSWORD:-}"
 KEEP_PLAYWRIGHT_SESSION="${KEEP_PLAYWRIGHT_SESSION:-0}"
 PREFER_EMAIL_OTP="${PREFER_EMAIL_OTP:-1}"
 STOP_AFTER_EMAIL_VERIFICATION="${STOP_AFTER_EMAIL_VERIFICATION:-1}"
+ALLOW_ABOUT_YOU_AUTOFILL="${ALLOW_ABOUT_YOU_AUTOFILL:-0}"
+REGISTER_OBSERVATION_LOG="${REGISTER_OBSERVATION_LOG:-$HOME/.codexbar/register-observations.jsonl}"
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -100,6 +102,23 @@ sleep_brief() {
   sleep "${1:-1}"
 }
 
+safe_url_host_path() {
+  python3 - "$1" <<'PY'
+import sys
+from urllib.parse import urlparse
+
+raw = sys.argv[1].strip()
+if not raw:
+    raise SystemExit(0)
+
+parsed = urlparse(raw)
+path = parsed.path or "/"
+host = parsed.netloc or parsed.path
+scheme = f"{parsed.scheme}://" if parsed.scheme else ""
+print(f"{scheme}{host}{path}")
+PY
+}
+
 current_state_json() {
   eval_json "$(cat <<'JS'
 () => JSON.stringify((() => {
@@ -152,9 +171,12 @@ current_state_json() {
     !/auth\.openai\.com|\/log-in|\/password|email-verification|phone|captcha/i.test(location.href) &&
     (promptTextarea || /what can i help with|how can i help|给 chatgpt 发送消息|新建聊天|temporary chat|message chatgpt/i.test(lowered))
   );
+  const manualReview = /manual review|review your request|suspicious|unusual activity|我们需要进一步审核|需要进一步审核|可疑|异常活动/.test(lowered);
+  const urlHostPath = `${location.origin}${location.pathname}`;
 
   return {
     href: location.href,
+    urlHostPath,
     title: document.title,
     bodyText,
     emailInput,
@@ -173,6 +195,7 @@ current_state_json() {
     otpRegistrationOption,
     captchaChallenge,
     phoneChallenge,
+    manualReview,
     success
   };
 })())
@@ -226,6 +249,111 @@ fi
 AGE_JS="${AGE//\\/\\\\}"
 AGE_JS="${AGE_JS//\"/\\\"}"
 
+record_register_observation() {
+  local outcome="$1"
+  local phase="$2"
+  local workflow_status="$3"
+  local failure_category="$4"
+  local manual_action="$5"
+  local current_url_host_path="$6"
+  local detail="${7:-}"
+
+  python3 - "$REGISTER_OBSERVATION_LOG" "$RELAY_EMAIL" "$phase" "$workflow_status" "$AUTH_METHOD" "$failure_category" "$manual_action" "$current_url_host_path" "$detail" "$outcome" "$SESSION" "$SECONDS" <<'PY'
+import datetime as dt
+import json
+import os
+import re
+import sys
+
+(
+    path,
+    email,
+    phase,
+    workflow_status,
+    auth_method,
+    failure_category,
+    manual_action,
+    url_host_path,
+    detail,
+    outcome,
+    session,
+    duration,
+) = sys.argv[1:]
+
+parent = os.path.dirname(path)
+if parent:
+    os.makedirs(parent, exist_ok=True)
+
+redacted_detail = re.sub(r"https?://[^\s]+", "[redacted-url]", detail)
+record = {
+    "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
+    "phase": phase,
+    "outcome": outcome,
+    "email": email,
+    "workflow_status": workflow_status,
+    "auth_method": auth_method,
+    "failure_category": failure_category,
+    "manual_action": manual_action,
+    "last_seen_url_host_path": url_host_path,
+    "control_path": "playwright",
+    "session": session,
+    "duration_secs": duration,
+    "detail": redacted_detail[:1000],
+}
+
+with open(path, "a", encoding="utf-8") as fh:
+    fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+PY
+}
+
+emit_register_summary() {
+  local workflow_status="$1"
+  local failure_category="$2"
+  local manual_action="$3"
+  local current_url_host_path="$4"
+  local detail="${5:-}"
+  local import_eligible="0"
+
+  AUTH_METHOD="$([[ "$used_email_otp" == "1" ]] && printf 'email_otp' || printf 'password')"
+  if [[ "$workflow_status" == "completed" && "$AUTH_METHOD" == "password" && "$manual_action" == "none" ]]; then
+    import_eligible="1"
+  fi
+
+  printf 'REGISTERED_EMAIL=%s\n' "$RELAY_EMAIL"
+  if [[ "$AUTH_METHOD" == "email_otp" ]]; then
+    printf 'PASSWORD=\n'
+  else
+    printf 'PASSWORD=%s\n' "$PASSWORD"
+  fi
+  printf 'PLAYWRIGHT_SESSION=%s\n' "$SESSION"
+  printf 'REGISTRATION_STATUS=%s\n' "$status"
+  printf 'AUTH_METHOD=%s\n' "$AUTH_METHOD"
+  printf 'WORKFLOW_PHASE=register\n'
+  printf 'WORKFLOW_STATUS=%s\n' "$workflow_status"
+  printf 'FAILURE_CATEGORY=%s\n' "$failure_category"
+  printf 'MANUAL_ACTION=%s\n' "$manual_action"
+  printf 'IMPORT_ELIGIBLE=%s\n' "$import_eligible"
+  if [[ -n "$current_url_host_path" ]]; then
+    printf 'LAST_SEEN_URL_HOST_PATH=%s\n' "$current_url_host_path"
+  fi
+  if [[ -n "$stop_reason" ]]; then
+    printf 'STOP_REASON=%s\n' "$stop_reason"
+  fi
+
+  if [[ "$workflow_status" == "completed" ]]; then
+    record_register_observation "success" "register" "$workflow_status" "$failure_category" "$manual_action" "$current_url_host_path" "$detail"
+    return 0
+  fi
+
+  if [[ "$workflow_status" == "retryable_failure" ]]; then
+    record_register_observation "failure" "register" "$workflow_status" "$failure_category" "$manual_action" "$current_url_host_path" "$detail"
+    return 1
+  fi
+
+  record_register_observation "manual_required" "register" "$workflow_status" "$failure_category" "$manual_action" "$current_url_host_path" "$detail"
+  return 1
+}
+
 playwright-cli session-stop "$SESSION" >/dev/null 2>&1 || true
 playwright-cli session-delete "$SESSION" >/dev/null 2>&1 || true
 pw --isolated --browser chrome --headed open about:blank >/dev/null
@@ -249,13 +377,35 @@ mail_code_baseline="$(latest_code || true)"
 
 status="IN_PROGRESS"
 stop_reason=""
+failure_category=""
+manual_action="none"
+last_seen_url_host_path=""
 deadline=$((SECONDS + 300))
 
 while (( SECONDS < deadline )); do
   STATE_JSON="$(current_state_json)"
   load_state_vars "$STATE_JSON"
+  last_seen_url_host_path="$URLHOSTPATH"
 
-  if [[ "$STOP_AFTER_EMAIL_VERIFICATION" == "1" && "$code_attempts" -gt 0 && "$CODEINPUT" == "0" && "$HREF" != *"email-verification"* ]]; then
+  if [[ "$MANUALREVIEW" == "1" ]]; then
+    status="MANUAL_REVIEW_REQUIRED"
+    stop_reason="manual_review"
+    failure_category="manual_review"
+    manual_action="complete_provider_challenge"
+    break
+  fi
+
+  if [[ "$NAMEINPUT" == "1" || "$AGEINPUT" == "1" || ( "$YEARINPUT" == "1" && "$MONTHINPUT" == "1" && "$DAYINPUT" == "1" ) ]]; then
+    if [[ "$ALLOW_ABOUT_YOU_AUTOFILL" != "1" || -z "$ACCOUNT_NAME" || -z "$BIRTH_YEAR" || -z "$BIRTH_MONTH" || -z "$BIRTH_DAY" ]]; then
+      status="ABOUT_YOU_BLOCK"
+      stop_reason="about_you"
+      failure_category="about_you_block"
+      manual_action="finish_about_you"
+      break
+    fi
+  fi
+
+  if [[ "$STOP_AFTER_EMAIL_VERIFICATION" == "1" && "$code_attempts" -gt 0 && "$CODEINPUT" == "0" && "$HREF" != *"email-verification"* && "$failure_category" == "" ]]; then
     status="REGISTERED_AFTER_EMAIL_VERIFICATION"
     stop_reason="email_verification_complete"
     break
@@ -267,13 +417,18 @@ while (( SECONDS < deadline )); do
   fi
 
   if [[ "$CAPTCHACHALLENGE" == "1" ]]; then
-    printf 'captcha challenge detected during registration\n' >&2
-    exit 1
+    status="CAPTCHA_CHALLENGE"
+    stop_reason="captcha_challenge"
+    failure_category="captcha_challenge"
+    manual_action="complete_provider_challenge"
+    break
   fi
 
   if [[ "$PHONECHALLENGE" == "1" ]]; then
     status="PHONE_VERIFICATION_REQUIRED"
     stop_reason="phone_verification"
+    failure_category="phone_verification"
+    manual_action="complete_provider_challenge"
     pw close >/dev/null 2>&1 || true
     break
   fi
@@ -495,7 +650,7 @@ JS
     continue
   fi
 
-  if [[ "$NAMEINPUT" == "1" || "$AGEINPUT" == "1" || ( "$YEARINPUT" == "1" && "$MONTHINPUT" == "1" && "$DAYINPUT" == "1" ) ]]; then
+  if [[ "$ALLOW_ABOUT_YOU_AUTOFILL" == "1" && ( "$NAMEINPUT" == "1" || "$AGEINPUT" == "1" || ( "$YEARINPUT" == "1" && "$MONTHINPUT" == "1" && "$DAYINPUT" == "1" ) ) ]]; then
     ((profile_attempts += 1))
     run_code "$(cat <<JS
 async (page) => {
@@ -621,19 +776,33 @@ JS
 done
 
 if [[ "$status" == "IN_PROGRESS" ]]; then
-  printf 'timed out while registering %s on chatgpt.com\n' "$RELAY_EMAIL" >&2
-  exit 1
+  if [[ "$CODEINPUT" == "1" || "$resend_attempts" -gt 0 ]]; then
+    status="MAIL_CODE_TIMEOUT"
+    failure_category="mail_code_timeout"
+    manual_action="retry_after_local_fix"
+  else
+    status="REGISTRATION_TIMEOUT"
+    failure_category="provider_timeout"
+    manual_action="complete_provider_challenge"
+  fi
 fi
 
-printf 'REGISTERED_EMAIL=%s\n' "$RELAY_EMAIL"
-if [[ "$used_email_otp" == "1" ]]; then
-  printf 'PASSWORD=\n'
-else
-  printf 'PASSWORD=%s\n' "$PASSWORD"
-fi
-printf 'PLAYWRIGHT_SESSION=%s\n' "$SESSION"
-printf 'REGISTRATION_STATUS=%s\n' "$status"
-printf 'AUTH_METHOD=%s\n' "$([[ "$used_email_otp" == "1" ]] && printf 'email_otp' || printf 'password')"
-if [[ -n "$stop_reason" ]]; then
-  printf 'STOP_REASON=%s\n' "$stop_reason"
-fi
+case "$status" in
+  REGISTERED|REGISTERED_AFTER_EMAIL_VERIFICATION)
+    if [[ "$used_email_otp" == "1" ]]; then
+      manual_action="review_passwordless_account"
+    else
+      manual_action="none"
+    fi
+    emit_register_summary "completed" "" "$manual_action" "$last_seen_url_host_path"
+    ;;
+  MAIL_CODE_TIMEOUT)
+    emit_register_summary "retryable_failure" "$failure_category" "$manual_action" "$last_seen_url_host_path" "mail code not received before deadline"
+    ;;
+  CAPTCHA_CHALLENGE|PHONE_VERIFICATION_REQUIRED|ABOUT_YOU_BLOCK|MANUAL_REVIEW_REQUIRED|REGISTRATION_TIMEOUT)
+    emit_register_summary "manual_required" "$failure_category" "$manual_action" "$last_seen_url_host_path" "$status"
+    ;;
+  *)
+    emit_register_summary "retryable_failure" "${failure_category:-legacy_register_failure}" "${manual_action:-retry_after_local_fix}" "$last_seen_url_host_path" "$status"
+    ;;
+esac

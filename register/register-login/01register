@@ -21,6 +21,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 HIDE_MY_EMAIL_SCRIPT="$ROOT_DIR/chatgpt-anon-register/scripts/create_hide_my_email.sh"
 REGISTER_SCRIPT="$ROOT_DIR/chatgpt-anon-register/scripts/register_chatgpt.sh"
 CSV_SHADOW_HELPER="$ROOT_DIR/scripts/codex_csv_shadow.sh"
+CSV_STATE_HELPER="$ROOT_DIR/scripts/codex_csv_state.py"
 
 COUNT="${COUNT:-${1:-10}}"
 INTERVAL_SECS="${INTERVAL_SECS:-10}"
@@ -33,67 +34,28 @@ require_cmd() {
   }
 }
 
-ensure_csv_header() {
-  python3 - "$CSV_PATH" <<'PY'
-import csv, os, sys
-path = sys.argv[1]
-header = ["email", "password", "status", "url"]
-if not os.path.exists(path):
-    with open(path, "w", encoding="utf-8", newline="") as fh:
-        csv.writer(fh).writerow(header)
-    raise SystemExit(0)
-with open(path, "r", encoding="utf-8", newline="") as fh:
-    rows = list(csv.reader(fh))
-if not rows:
-    rows = [header]
-elif rows[0] not in (header, ["email", "password", "status"]):
-    rows.insert(0, header)
-if rows[0] == ["email", "password", "status"]:
-    rows[0] = header
-for row in rows[1:]:
-    while len(row) < 4:
-        row.append("")
-with open(path, "w", encoding="utf-8", newline="") as fh:
-    csv.writer(fh).writerows(rows)
-PY
+csv_upsert_row() {
+  local email="$1" password="$2" status="$3" url="$4" auth_method="$5" phase="$6" failure_category="$7" manual_action="$8"
+  shift 8
+  python3 "$CSV_STATE_HELPER" upsert "$CSV_PATH" \
+    --email "$email" \
+    --password "$password" \
+    --status "$status" \
+    --url "$url" \
+    --auth-method "$auth_method" \
+    --phase "$phase" \
+    --failure-category "$failure_category" \
+    --manual-action "$manual_action" \
+    "$@"
 }
 
-upsert_csv_row() {
-  local email="$1" password="$2" status="$3" url="${4:-}"
-  python3 - "$CSV_PATH" "$email" "$password" "$status" "$url" <<'PY'
-import csv, sys
-path, email, password, status, url = sys.argv[1:]
-with open(path, "r", encoding="utf-8", newline="") as fh:
-    rows = list(csv.reader(fh))
-if not rows:
-    rows = [["email", "password", "status", "url"]]
-target_index = None
-if email:
-    for idx in range(len(rows) - 1, 0, -1):
-        row = rows[idx]
-        while len(row) < 4: row.append("")
-        if row[0] == email:
-            target_index = idx; break
-if target_index is None:
-    rows.append([email, password, status, url])
-else:
-    existing = rows[target_index]
-    while len(existing) < 4: existing.append("")
-    rows[target_index] = [
-        email or existing[0],
-        password if password != "" else existing[1],
-        status if status != "" else existing[2],
-        url if url != "" else existing[3],
-    ]
-with open(path, "w", encoding="utf-8", newline="") as fh:
-    csv.writer(fh).writerows(rows)
-PY
-}
-
-require_cmd bash require_cmd python3 require_cmd swift require_cmd playwright-cli
+require_cmd bash
+require_cmd python3
+require_cmd swift
+require_cmd playwright-cli
 source "$CSV_SHADOW_HELPER"
 codex_csv_begin_mutation "$CSV_PATH"
-ensure_csv_header
+python3 "$CSV_STATE_HELPER" ensure "$CSV_PATH"
 
 printf '========================================\n'
 printf '🚀 开始批量注册 OpenAI 账号\n'
@@ -112,7 +74,7 @@ for i in $(seq 1 "$COUNT"); do
   RELAY_EMAIL="$("$HIDE_MY_EMAIL_SCRIPT" 2>/dev/null)" || true
   if [[ -z "$RELAY_EMAIL" ]]; then
     printf '❌ [%s/%s] 创建 iCloud 邮箱失败\n' "$i" "$COUNT" >&2
-    upsert_csv_row "" "" "hme_failed" ""
+    csv_upsert_row "" "" "retryable_failure" "" "unknown" "register" "hide_my_email_failed" "retry_after_local_fix"
     ((FAILED++))
     continue
   fi
@@ -125,14 +87,40 @@ for i in $(seq 1 "$COUNT"); do
   REG_PASSWORD="$(printf '%s\n' "$REGISTER_OUTPUT" | sed -n 's/^PASSWORD=//p' | tail -n 1)"
   REG_STATUS="$(printf '%s\n' "$REGISTER_OUTPUT" | sed -n 's/^REGISTRATION_STATUS=//p' | tail -n 1)"
   REG_METHOD="$(printf '%s\n' "$REGISTER_OUTPUT" | sed -n 's/^AUTH_METHOD=//p' | tail -n 1)"
+  WORKFLOW_PHASE="$(printf '%s\n' "$REGISTER_OUTPUT" | sed -n 's/^WORKFLOW_PHASE=//p' | tail -n 1)"
+  WORKFLOW_STATUS="$(printf '%s\n' "$REGISTER_OUTPUT" | sed -n 's/^WORKFLOW_STATUS=//p' | tail -n 1)"
+  FAILURE_CATEGORY="$(printf '%s\n' "$REGISTER_OUTPUT" | sed -n 's/^FAILURE_CATEGORY=//p' | tail -n 1)"
+  MANUAL_ACTION="$(printf '%s\n' "$REGISTER_OUTPUT" | sed -n 's/^MANUAL_ACTION=//p' | tail -n 1)"
+  IMPORT_ELIGIBLE="$(printf '%s\n' "$REGISTER_OUTPUT" | sed -n 's/^IMPORT_ELIGIBLE=//p' | tail -n 1)"
+  LAST_SEEN_URL_HOST_PATH="$(printf '%s\n' "$REGISTER_OUTPUT" | sed -n 's/^LAST_SEEN_URL_HOST_PATH=//p' | tail -n 1)"
 
-  if [[ -n "$REG_EMAIL" && "$EXIT_CODE" -eq 0 ]]; then
-    upsert_csv_row "$REG_EMAIL" "$REG_PASSWORD" "registered" ""
-    printf '✅ [%s/%s] 注册成功 | %s | 方式: %s\n' "$i" "$COUNT" "$REG_EMAIL" "${REG_METHOD:-unknown}"
+  TARGET_EMAIL="${REG_EMAIL:-$RELAY_EMAIL}"
+  TARGET_PHASE="${WORKFLOW_PHASE:-register}"
+  TARGET_STATUS="${WORKFLOW_STATUS:-retryable_failure}"
+  TARGET_METHOD="${REG_METHOD:-unknown}"
+  TARGET_FAILURE="${FAILURE_CATEGORY:-}"
+  TARGET_MANUAL="${MANUAL_ACTION:-none}"
+  TARGET_URL="${LAST_SEEN_URL_HOST_PATH:-}"
+
+  if [[ "$TARGET_STATUS" == "completed" ]]; then
+    csv_upsert_row "$TARGET_EMAIL" "$REG_PASSWORD" "$TARGET_STATUS" "$TARGET_URL" "$TARGET_METHOD" "$TARGET_PHASE" "" "$TARGET_MANUAL" --retry-count 0
+    printf '✅ [%s/%s] 注册完成 | %s | 方式: %s' "$i" "$COUNT" "$TARGET_EMAIL" "${REG_METHOD:-unknown}"
+    if [[ "$IMPORT_ELIGIBLE" == "1" ]]; then
+      printf ' | 可自动导入\n'
+    else
+      printf ' | 需人工接管: %s\n' "$TARGET_MANUAL"
+    fi
     ((SUCCESS++))
   else
-    upsert_csv_row "$RELAY_EMAIL" "" "registration_failed" ""
-    printf '❌ [%s/%s] 注册失败\n' "$i" "$COUNT" >&2
+    csv_upsert_row "$TARGET_EMAIL" "$REG_PASSWORD" "$TARGET_STATUS" "$TARGET_URL" "$TARGET_METHOD" "$TARGET_PHASE" "$TARGET_FAILURE" "$TARGET_MANUAL" --increment-retry-count
+    printf '❌ [%s/%s] 注册未完成 | 状态: %s' "$i" "$COUNT" "${TARGET_STATUS:-unknown}" >&2
+    if [[ -n "$TARGET_FAILURE" ]]; then
+      printf ' | 分类: %s' "$TARGET_FAILURE" >&2
+    fi
+    if [[ -n "$TARGET_MANUAL" && "$TARGET_MANUAL" != "none" ]]; then
+      printf ' | 动作: %s' "$TARGET_MANUAL" >&2
+    fi
+    printf '\n' >&2
     ((FAILED++))
   fi
 

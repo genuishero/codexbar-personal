@@ -10,25 +10,31 @@ LAUNCH_CHROME_SCRIPT="$ROOT_DIR/scripts/launch_chrome_cdp.sh"
 CDP_EVAL_SCRIPT="$ROOT_DIR/scripts/chrome_cdp_eval.mjs"
 CDP_NAVIGATE_SCRIPT="$ROOT_DIR/scripts/chrome_cdp_navigate.mjs"
 MAIL_CODE_SCRIPT="$ROOT_DIR/chatgpt-anon-register/scripts/get_latest_openai_code.applescript"
+CSV_STATE_HELPER="$ROOT_DIR/scripts/codex_csv_state.py"
+IMPORT_AUTH_MODE_HELPER="$ROOT_DIR/scripts/import_auth_mode.sh"
 CODEXBAR_APP="${CODEXBAR_APP:-/Applications/codexbar.app}"
 OPENAI_EMAIL="${OPENAI_EMAIL:-}"
 OPENAI_PASSWORD="${OPENAI_PASSWORD:-}"
 CODEX_AUTH_URL_FILE="${CODEX_AUTH_URL_FILE:-}"
 CODEX_CSV_PATH="${CODEX_CSV_PATH:-}"
 CODEX_CSV_EMAIL="${CODEX_CSV_EMAIL:-$OPENAI_EMAIL}"
-ACCOUNT_NAME="${ACCOUNT_NAME:-River Vale}"
-BIRTH_YEAR="${BIRTH_YEAR:-1990}"
-BIRTH_MONTH="${BIRTH_MONTH:-01}"
-BIRTH_DAY="${BIRTH_DAY:-08}"
+ACCOUNT_NAME="${ACCOUNT_NAME:-}"
+BIRTH_YEAR="${BIRTH_YEAR:-}"
+BIRTH_MONTH="${BIRTH_MONTH:-}"
+BIRTH_DAY="${BIRTH_DAY:-}"
 AGE="${AGE:-}"
 KEEP_CHROME_CDP="${KEEP_CHROME_CDP:-0}"
-PREFER_EMAIL_OTP_LOGIN="${PREFER_EMAIL_OTP_LOGIN:-1}"
 ALLOW_SAFARI_AUTH_URL_FALLBACK="${ALLOW_SAFARI_AUTH_URL_FALLBACK:-0}"
 TEST_OAUTH_NAV_ONLY="${TEST_OAUTH_NAV_ONLY:-0}"
 CDP_PORT="${CDP_PORT:-}"
 CHROME_USER_DATA_DIR="${CHROME_USER_DATA_DIR:-}"
 INVALID_STATE_RETRY_LIMIT="${INVALID_STATE_RETRY_LIMIT:-2}"
 IMPORT_OBSERVATION_LOG="${IMPORT_OBSERVATION_LOG:-$HOME/.codexbar/register-import-observations.jsonl}"
+ALLOW_ABOUT_YOU_AUTOFILL="${ALLOW_ABOUT_YOU_AUTOFILL:-0}"
+
+source "$IMPORT_AUTH_MODE_HELPER"
+PREFER_EMAIL_OTP_LOGIN="$(resolve_prefer_email_otp_login "${PREFER_EMAIL_OTP_LOGIN-}" "$OPENAI_PASSWORD")"
+IMPORT_AUTH_METHOD="$(resolve_import_auth_method "$OPENAI_PASSWORD" "$PREFER_EMAIL_OTP_LOGIN" "0")"
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -115,9 +121,10 @@ wait_for_account_import() {
   local email="$1"
   local timeout_secs="${2:-120}"
   local deadline=$((SECONDS + timeout_secs))
+  local config_path="${HOME}/.codexbar/config.json"
 
   while (( SECONDS < deadline )); do
-    if python3 - "$email" /Users/lzl/.codexbar/config.json <<'PY'
+    if python3 - "$email" "$config_path" <<'PY'
 import json, sys
 
 target = sys.argv[1]
@@ -144,32 +151,7 @@ PY
 
 update_codex_csv_url() {
   [[ -n "$CODEX_CSV_PATH" && -n "$CODEX_CSV_EMAIL" ]] || return 0
-
-  python3 - "$CODEX_CSV_PATH" "$CODEX_CSV_EMAIL" "$1" <<'PY'
-import csv
-import sys
-
-path, email, url = sys.argv[1:]
-with open(path, "r", encoding="utf-8", newline="") as fh:
-    rows = list(csv.reader(fh))
-
-if not rows:
-    raise SystemExit(0)
-
-for idx in range(len(rows) - 1, 0, -1):
-    row = rows[idx]
-    while len(row) < 4:
-        row.append("")
-    if row[0] == email:
-        row[3] = url
-        rows[idx] = row
-        break
-else:
-    rows.append([email, "", "", url])
-
-with open(path, "w", encoding="utf-8", newline="") as fh:
-    csv.writer(fh).writerows(rows)
-PY
+  python3 "$CSV_STATE_HELPER" set-url "$CODEX_CSV_PATH" --email "$CODEX_CSV_EMAIL" --url "$1"
 }
 
 find_free_port() {
@@ -221,6 +203,7 @@ current_state_json() {
 
   return {
     href: location.href,
+    urlHostPath: `${location.origin}${location.pathname}`,
     title: document.title,
     bodyText,
     emailInput: inputs.some((el) => /电子邮件地址|email/.test(attrs(el))),
@@ -231,6 +214,9 @@ current_state_json() {
     callbackPage: /localhost:1455\/auth\/callback/.test(location.href),
     addPhone: /\/add-phone/.test(location.href) || /电话号码是必填项|添加电话号码|phone number is required|verify phone/.test(lowered),
     invalidStateError: /invalid_state/.test(location.href + ' ' + lowered) || /验证过程中出错/.test(lowered),
+    captchaChallenge: /captcha|verify you are human|robot|真人验证|人机验证/.test(lowered),
+    manualReview: /manual review|review your request|suspicious|unusual activity|我们需要进一步审核|需要进一步审核|可疑|异常活动/.test(lowered),
+    aboutYouBlock: inputs.some((el) => /全名|姓名|full name|name|年龄|(^|[^a-z])age([^a-z]|$)|(^|[^a-z])year([^a-z]|$)|(^|[^a-z])month([^a-z]|$)|(^|[^a-z])day([^a-z]|$)|年, |月, |日, /.test(attrs(el))),
     ageInput: inputs.some((el) => /年龄|(^|[^a-z])age([^a-z]|$)/.test(attrs(el))),
     yearInput: inputs.some((el) => /(^|[^a-z])year([^a-z]|$)|年, /.test(attrs(el))),
     monthInput: inputs.some((el) => /(^|[^a-z])month([^a-z]|$)|月, /.test(attrs(el))),
@@ -271,8 +257,33 @@ classify_import_failure() {
     return
   fi
 
+  if [[ "$combined" == *"captcha_challenge"* || "$combined" == *"verify you are human"* || "$combined" == *"真人验证"* || "$combined" == *"人机验证"* ]]; then
+    printf 'captcha_challenge\n'
+    return
+  fi
+
   if [[ "$combined" == *"invalid_state"* || "$combined" == *"验证过程中出错"* ]]; then
     printf 'invalid_state\n'
+    return
+  fi
+
+  if [[ "$combined" == *"manual_review"* || "$combined" == *"review your request"* || "$combined" == *"异常活动"* ]]; then
+    printf 'manual_review\n'
+    return
+  fi
+
+  if [[ "$combined" == *"mail_code_timeout"* || "$combined" == *"waiting for a new openai email code"* ]]; then
+    printf 'mail_code_timeout\n'
+    return
+  fi
+
+  if [[ "$combined" == *"about_you_block"* || "$combined" == *"full name"* || "$combined" == *"年龄"* ]]; then
+    printf 'about_you_block\n'
+    return
+  fi
+
+  if [[ "$combined" == *"failed to read the Codexbar OAuth URL"* ]]; then
+    printf 'auth_url_capture_failed\n'
     return
   fi
 
@@ -281,33 +292,58 @@ classify_import_failure() {
     return
   fi
 
-  printf 'timeout\n'
+  printf 'provider_timeout\n'
 }
 
 record_import_observation() {
   local outcome="$1"
   local category="$2"
-  local detail="${3:-}"
+  local workflow_status="$3"
+  local manual_action="$4"
+  local current_url_host_path="$5"
+  local detail="${6:-}"
 
-  python3 - "$IMPORT_OBSERVATION_LOG" "$OPENAI_EMAIL" "$outcome" "$category" "$AUTH_URL_SOURCE" "$stop_reason" "$detail" <<'PY'
+  python3 - "$IMPORT_OBSERVATION_LOG" "$OPENAI_EMAIL" "$outcome" "$category" "$AUTH_URL_SOURCE" "$stop_reason" "$workflow_status" "$manual_action" "$current_url_host_path" "$detail" "$SECONDS" "$IMPORT_AUTH_METHOD" <<'PY'
 import datetime as dt
 import json
 import os
+import re
 import sys
 
-path, email, outcome, category, auth_url_source, stop_reason, detail = sys.argv[1:]
+(
+    path,
+    email,
+    outcome,
+    category,
+    auth_url_source,
+    stop_reason,
+    workflow_status,
+    manual_action,
+    current_url_host_path,
+    detail,
+    duration,
+    auth_method,
+) = sys.argv[1:]
 parent = os.path.dirname(path)
 if parent:
     os.makedirs(parent, exist_ok=True)
 
+redacted_detail = re.sub(r"https?://[^\s]+", "[redacted-url]", detail)
 record = {
     "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
     "email": email,
+    "phase": "import",
     "outcome": outcome,
     "category": category,
     "auth_url_source": auth_url_source,
     "stop_reason": stop_reason,
-    "detail": detail[:2000],
+    "workflow_status": workflow_status,
+    "auth_method": auth_method,
+    "manual_action": manual_action,
+    "last_seen_url_host_path": current_url_host_path,
+    "control_path": "cdp",
+    "duration_secs": duration,
+    "detail": redacted_detail[:1000],
 }
 
 with open(path, "a", encoding="utf-8") as fh:
@@ -318,10 +354,20 @@ PY
 exit_with_classified_failure() {
   local detail="$1"
   local category=""
+  local workflow_status="${2:-retryable_failure}"
+  local manual_action="${3:-retry_after_local_fix}"
+  local current_url_host_path="${4:-}"
 
   category="$(classify_import_failure "$detail")"
   printf 'IMPORT_FAILURE_CATEGORY=%s\n' "$category" >&2
-  record_import_observation "failure" "$category" "$detail"
+  printf 'AUTH_METHOD=%s\n' "$IMPORT_AUTH_METHOD" >&2
+  printf 'WORKFLOW_PHASE=import\n' >&2
+  printf 'WORKFLOW_STATUS=%s\n' "$workflow_status" >&2
+  printf 'MANUAL_ACTION=%s\n' "$manual_action" >&2
+  if [[ -n "$current_url_host_path" ]]; then
+    printf 'LAST_SEEN_URL_HOST_PATH=%s\n' "$current_url_host_path" >&2
+  fi
+  record_import_observation "failure" "$category" "$workflow_status" "$manual_action" "$current_url_host_path" "$detail"
   printf '%s\n' "$detail" >&2
   exit 1
 }
@@ -450,12 +496,40 @@ invalid_state_retries=0
 deadline=$((SECONDS + 360))
 status="IN_PROGRESS"
 stop_reason=""
+last_seen_url_host_path=""
+manual_action="none"
+code_wait_timed_out=0
+used_email_otp_login=0
 
 while (( SECONDS < deadline )); do
   if ! STATE_JSON="$(current_state_json 2>&1)"; then
     exit_with_classified_failure "failed to read current browser state from Chrome CDP"$'\n'"$STATE_JSON"
   fi
   load_state_vars "$STATE_JSON"
+  last_seen_url_host_path="$URLHOSTPATH"
+
+  if [[ "$CAPTCHACHALLENGE" == "1" ]]; then
+    status="BLOCKED"
+    stop_reason="captcha_challenge"
+    manual_action="complete_provider_challenge"
+    break
+  fi
+
+  if [[ "$MANUALREVIEW" == "1" ]]; then
+    status="BLOCKED"
+    stop_reason="manual_review"
+    manual_action="complete_provider_challenge"
+    break
+  fi
+
+  if [[ "$ABOUTYOUBLOCK" == "1" ]]; then
+    if [[ "$ALLOW_ABOUT_YOU_AUTOFILL" != "1" || -z "$ACCOUNT_NAME" || -z "$BIRTH_YEAR" || -z "$BIRTH_MONTH" || -z "$BIRTH_DAY" ]]; then
+      status="BLOCKED"
+      stop_reason="about_you_block"
+      manual_action="finish_about_you"
+      break
+    fi
+  fi
 
   if [[ "$CALLBACKPAGE" == "1" ]]; then
     if wait_for_account_import "$OPENAI_EMAIL" 120; then
@@ -510,7 +584,9 @@ JS
     continue
   fi
 
-  if [[ "$PREFER_EMAIL_OTP_LOGIN" == "1" && "$OTPLOGINOPTION" == "1" ]]; then
+  if should_use_email_otp_login "$PREFER_EMAIL_OTP_LOGIN" "$OTPLOGINOPTION"; then
+    used_email_otp_login=1
+    IMPORT_AUTH_METHOD="$(resolve_import_auth_method "$OPENAI_PASSWORD" "$PREFER_EMAIL_OTP_LOGIN" "$OTPLOGINOPTION")"
     run_cdp_or_fail "$(cat <<'JS'
 () => {
   const buttons = [...document.querySelectorAll('button')];
@@ -596,6 +672,7 @@ JS
       sleep 5
       continue
     fi
+    code_wait_timed_out=1
     sleep 3
     continue
   fi
@@ -643,7 +720,7 @@ JS
     continue
   fi
 
-  if [[ "$AGEINPUT" == "1" || "$YEARINPUT" == "1" || "$NAMEINPUT" == "1" ]]; then
+  if [[ "$ALLOW_ABOUT_YOU_AUTOFILL" == "1" && ( "$AGEINPUT" == "1" || "$YEARINPUT" == "1" || "$NAMEINPUT" == "1" ) ]]; then
     run_cdp_or_fail "$(cat <<JS
 () => {
   const fullName = "$ACCOUNT_NAME_JS";
@@ -700,21 +777,39 @@ done
 
 if [[ "$status" != "IMPORTED" ]]; then
   if [[ "$stop_reason" == "phone_verification_required" ]]; then
-    exit_with_classified_failure "Codexbar import blocked by OpenAI phone verification for $OPENAI_EMAIL"
+    exit_with_classified_failure "Codexbar import blocked by OpenAI phone verification for $OPENAI_EMAIL" "manual_required" "complete_provider_challenge" "$last_seen_url_host_path"
   elif [[ "$stop_reason" == "invalid_state" ]]; then
-    exit_with_classified_failure "Codexbar import hit an OpenAI invalid_state error for $OPENAI_EMAIL"
+    exit_with_classified_failure "Codexbar import hit an OpenAI invalid_state error for $OPENAI_EMAIL" "retryable_failure" "retry_after_local_fix" "$last_seen_url_host_path"
+  elif [[ "$stop_reason" == "captcha_challenge" ]]; then
+    exit_with_classified_failure "Codexbar import blocked by captcha challenge for $OPENAI_EMAIL" "manual_required" "complete_provider_challenge" "$last_seen_url_host_path"
+  elif [[ "$stop_reason" == "manual_review" ]]; then
+    exit_with_classified_failure "Codexbar import requires manual review for $OPENAI_EMAIL" "manual_required" "complete_provider_challenge" "$last_seen_url_host_path"
+  elif [[ "$stop_reason" == "about_you_block" ]]; then
+    exit_with_classified_failure "Codexbar import requires about-you completion for $OPENAI_EMAIL" "manual_required" "finish_about_you" "$last_seen_url_host_path"
+  elif [[ "$code_wait_timed_out" == "1" ]]; then
+    stop_reason="mail_code_timeout"
+    exit_with_classified_failure "timed out waiting for a new OpenAI email code while importing $OPENAI_EMAIL" "retryable_failure" "retry_after_local_fix" "$last_seen_url_host_path"
   else
-    exit_with_classified_failure "timed out while importing $OPENAI_EMAIL into Codexbar"
+    exit_with_classified_failure "timed out while importing $OPENAI_EMAIL into Codexbar" "manual_required" "complete_provider_challenge" "$last_seen_url_host_path"
   fi
 fi
 
 printf 'IMPORTED_EMAIL=%s\n' "$OPENAI_EMAIL"
 printf 'CDP_PORT=%s\n' "$CDP_PORT"
-record_import_observation "success" "imported" "Codexbar import completed successfully"
+printf 'AUTH_METHOD=%s\n' "$IMPORT_AUTH_METHOD"
+printf 'WORKFLOW_PHASE=import\n'
+printf 'WORKFLOW_STATUS=completed\n'
+printf 'MANUAL_ACTION=none\n'
+printf 'FAILURE_CATEGORY=\n'
+if [[ -n "$last_seen_url_host_path" ]]; then
+  printf 'LAST_SEEN_URL_HOST_PATH=%s\n' "$last_seen_url_host_path"
+fi
+record_import_observation "success" "imported" "completed" "none" "$last_seen_url_host_path" "Codexbar import completed successfully"
 python3 - <<'PY'
 import json
+import os
 
-with open('/Users/lzl/.codexbar/config.json', 'r', encoding='utf-8') as fh:
+with open(os.path.expanduser('~/.codexbar/config.json'), 'r', encoding='utf-8') as fh:
     config = json.load(fh)
 
 active_provider = config.get("active", {}).get("providerId")

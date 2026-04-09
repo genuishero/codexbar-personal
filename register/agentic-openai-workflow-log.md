@@ -426,3 +426,143 @@
     - verification:
       - `bash -n register/scripts/retry_codexbar_import_from_csv.sh`
       - local CSV/config diff shows no remaining pending rows after excluding the two invalid accounts
+
+### Run 2026-04-09 15:xx Asia/Shanghai
+
+- Scope: 按已批准的 ralplan，硬化 `register` 子树中的注册/导入状态机、CSV schema、观测与人工接管边界；明确不做任何规避 provider 风控的方案。
+- Strategy shift:
+  - 不再把“通过机器人检测”当作实现目标
+  - 改为优先修复确定性 bug、统一状态机、区分本地可重试故障与 provider block
+  - provider challenge / phone / about-you / manual review 统一进入 `manual_required`，不再混入普通自动重试
+- Implementation:
+  - 新增 `register/scripts/codex_csv_state.py`
+    - 统一 `codex.csv` schema 到 `v2`
+    - 兼容迁移旧 4 列 CSV
+    - 提供原子写回、import candidate / retry candidate 选择、reconcile imported 能力
+  - 新增 `register/scripts/test_codex_csv_state.py`
+    - 覆盖 legacy CSV 迁移、eligibility、retry matrix、reconcile imported
+  - 更新 `register/register-login/01register`
+    - 修复 `require_cmd` 调用错误
+    - 改为读取结构化输出 `WORKFLOW_PHASE / WORKFLOW_STATUS / FAILURE_CATEGORY / MANUAL_ACTION / IMPORT_ELIGIBLE`
+    - 通过 shared helper 落盘新 schema
+  - 更新 `register/chatgpt-anon-register/scripts/register_chatgpt.sh`
+    - 默认不再使用静态姓名/生日盲填 `about-you`
+    - 新增 register observation
+    - 输出结构化 workflow 字段
+  - 更新 `register/scripts/import_openai_account_to_codexbar.sh`
+    - 移除 `/Users/lzl/...` 硬编码
+    - 扩展 captcha / manual review / about-you / mail code timeout 分类
+    - 输出结构化 workflow 字段与脱敏 observation
+  - 更新 `register/register-login/02login`、`register/scripts/create_and_import_openai_account.sh`、`register/scripts/create_and_import_openai_accounts_batch.sh`、`register/scripts/retry_codexbar_import_from_csv.sh`
+    - 统一通过 helper 判断自动导入 / 自动重试资格
+    - OTP-only 账号不再被误当成密码可导入账号
+  - 更新 `register/scripts/summarize_import_observations.py`
+    - 汇总 register/import 两侧 observation
+  - 更新 `register/register-login/README.md`
+    - 文档改为新 schema、自动导入 gate、自动重试规则
+- Verification:
+  - `bash -n register/register-login/01register`
+  - `bash -n register/register-login/02login`
+  - `bash -n register/chatgpt-anon-register/scripts/register_chatgpt.sh`
+  - `bash -n register/scripts/import_openai_account_to_codexbar.sh`
+  - `bash -n register/scripts/create_and_import_openai_account.sh`
+  - `bash -n register/scripts/create_and_import_openai_accounts_batch.sh`
+  - `bash -n register/scripts/retry_codexbar_import_from_csv.sh`
+  - `python3 -m unittest discover -s register/scripts -p 'test_*.py'`
+  - `python3 register/scripts/codex_csv_state.py ensure /tmp/codexbar-test.csv`
+
+### Run 2026-04-09 21:17 Asia/Shanghai
+
+- Scope: 收口 register 状态机硬化后的 wrapper、README、summary 与 fixture/stub 证据，补齐 operator 文档和本地验证闭环。
+- Implementation:
+  - 更新 `register/README.md`
+    - 全量切换到中文 operator 文档
+    - 用 `v2` contract、自动导入 gate、自动重试/人工接管矩阵替换旧的 `registered/success/import_failed` 叙述
+    - 明确 wrapper 脚本的职责与行为边界
+  - 更新 `register/register-login/02login`
+    - 顶部注释和运行时提示不再使用“pending 账号”旧表述
+    - 明确只处理满足 helper gate 的导入候选
+  - 更新 `register/scripts/retry_codexbar_import_from_csv.sh`
+    - 无候选时输出改为 “auto-retry-eligible” 语义，避免 operator 误以为所有失败都可重试
+  - 更新 `register/scripts/register_and_login_10.sh`、`register/scripts/register_and_login_100.sh`、`register/scripts/register_100_accounts.sh`
+    - wrapper 不再依赖“取 CSV 最后一行 / 手工抽密码 / 旧 success 状态”这类旧假设
+    - 改为优先读取结构化 `WORKFLOW_PHASE / WORKFLOW_STATUS / MANUAL_ACTION`
+    - `register_and_login_10.sh` 只会把 `phase=import,status=retryable_failure` 的账号送进后续 retry
+  - 更新 `register/scripts/summarize_import_observations.py`
+    - 修正 register observation 使用 `failure_category` 时原先统计不到的问题
+    - 新增 `auth_method` 聚合
+    - recent failure 输出增加二次脱敏，避免旧 observation detail 中的 URL/query 或验证码被直接回显
+  - 新增 `register/scripts/test_observation_summary.py`
+    - fixture 验证 register/import observation 混合汇总、`auth_method` 统计与 detail 脱敏
+  - 新增 `register/scripts/test_codex_csv_shadow.py`
+    - fixture 验证 shadow sync / restore 兼容
+  - 更新 `register/scripts/test_codex_csv_state.py`
+    - 增补 import candidate / retry candidate gate 测试
+- Verification:
+  - `python3 -m unittest discover -s register/scripts -p 'test_*.py'` -> `8` tests, `OK`
+  - `python3 -m py_compile register/scripts/codex_csv_state.py register/scripts/summarize_import_observations.py register/scripts/test_codex_csv_state.py register/scripts/test_observation_summary.py register/scripts/test_codex_csv_shadow.py`
+  - `bash -n register/register-login/01register register/register-login/02login register/chatgpt-anon-register/scripts/register_chatgpt.sh register/scripts/import_openai_account_to_codexbar.sh register/scripts/create_and_import_openai_account.sh register/scripts/create_and_import_openai_accounts_batch.sh register/scripts/retry_codexbar_import_from_csv.sh register/scripts/register_100_accounts.sh register/scripts/register_and_login_10.sh register/scripts/register_and_login_10_v2.sh register/scripts/register_and_login_100.sh register/scripts/codex_csv_shadow.sh`
+  - `python3 register/scripts/codex_csv_state.py ensure "$(mktemp /tmp/codexbar-csv-XXXXXX.csv)"` -> header: `schema_version,email,password,status,url,auth_method,phase,failure_category,manual_action,retry_count,updated_at`
+  - 未跑 live provider 注册/导入；本轮只做 fixture/stub 与本地无副作用验证
+
+### Run 2026-04-09 21:3x Asia/Shanghai
+
+- Trigger:
+  - operator 在 `register/register-login` 下执行 `COUNT=5 INTERVAL_SECS=18 ./02login`
+  - 首个账号 `suntan64muezzin@icloud.com` 失败，日志显示：
+    - `IMPORT_FAILURE_CATEGORY=invalid_state`
+    - `AUTH_METHOD=email_otp`
+    - `WORKFLOW_STATUS=retryable_failure`
+    - `LAST_SEEN_URL_HOST_PATH=https://auth.openai.com/log-in/password`
+- Root cause investigation:
+  - 该账号在 CSV 中仍有密码，但导入脚本默认 `PREFER_EMAIL_OTP_LOGIN=1`
+  - 只要页面露出 OTP 入口，脚本就会从 password-capable 账号切到 OTP 分支
+  - 这与已批准 contract 冲突：自动导入 gate 只允许 password-capable 账号进入，导入阶段不应再默认自切到 `email_otp`
+- Implementation:
+  - 新增 `register/scripts/import_auth_mode.sh`
+    - 集中定义“是否默认偏好 OTP”与“当前导入 auth_method”决策
+  - 更新 `register/scripts/import_openai_account_to_codexbar.sh`
+    - 有密码时默认 `PREFER_EMAIL_OTP_LOGIN=0`
+    - 只有无密码或显式 override 才会切到 OTP
+  - 新增 `register/scripts/test_import_auth_mode.py`
+    - 覆盖：
+      - password 账号默认保持 password
+      - passwordless 账号默认走 OTP
+      - 显式 override 可强制 OTP
+  - 更新 `register/README.md` 与 `register/register-login/README.md`
+    - 记录 password-capable 账号默认不再自动切 OTP
+- Verification:
+  - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest register.scripts.test_import_auth_mode register.scripts.test_codex_csv_state register.scripts.test_observation_summary register.scripts.test_codex_csv_shadow` -> `11` tests, `OK`
+  - `bash -n register/scripts/import_auth_mode.sh register/scripts/import_openai_account_to_codexbar.sh register/register-login/02login register/scripts/retry_codexbar_import_from_csv.sh`
+  - local helper proof:
+    - `source register/scripts/import_auth_mode.sh`
+    - `resolve_prefer_email_otp_login "" "secret"` -> `0`
+    - `resolve_import_auth_method "secret" "0" "1"` -> `password`
+
+### Run 2026-04-09 21:36 Asia/Shanghai
+
+- Trigger:
+  - operator 执行：
+    - `EMAIL_FILTER="suntan64muezzin@icloud.com" LOGIN_INTERVAL_SECS=0 ../scripts/retry_codexbar_import_from_csv.sh`
+  - 返回：
+    - `no auto-retry-eligible Codexbar import account found ...`
+- Root cause:
+  - `register/scripts/codex_csv_state.py` 用 `retry_count < limit` 判定 eligibility
+  - 但 `retry_count` 的写法是“失败一次就先加 1”
+  - 结果 `invalid_state` 这种 `max retries = 1` 的分类在首次失败后立刻被判定为耗尽，没有给 replay lane 留出那一次自动重试
+- Implementation:
+  - 更新 `register/scripts/codex_csv_state.py`
+    - retry eligibility 改为 `retry_count <= limit`
+    - 在代码中补注释，明确当前 `retry_count` 语义是“已记录失败次数”，不是“仅 replay 次数”
+  - 更新 `register/scripts/test_codex_csv_state.py`
+    - 覆盖 `invalid_state` 在 `retry_count=1` 时仍可重试
+    - 覆盖 `invalid_state` 在 `retry_count=2` 时耗尽
+- Verification:
+  - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s register/scripts -p 'test_*.py'` -> `11` tests, `OK`
+  - `python3 -m py_compile register/scripts/codex_csv_state.py`
+  - `bash -n register/scripts/retry_codexbar_import_from_csv.sh register/scripts/import_openai_account_to_codexbar.sh register/scripts/import_auth_mode.sh`
+  - local dry-run candidate proof:
+    - `python3 register/scripts/codex_csv_state.py list-retry-candidates register/codex.csv --email-filter 'suntan64muezzin@icloud.com'`
+    - output:
+      - `suntan64muezzin@icloud.com`
+      - `<password redacted in this log>`
