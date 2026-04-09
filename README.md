@@ -55,6 +55,7 @@
 - 同一 provider 下挂多组 API key
 - 菜单栏里快速切换 provider / account
 - 本地 usage / 成本统计
+- 单一 update feed 驱动的版本检测与手动“检查更新”
 
 本地 usage / 成本统计来自对下面目录的扫描：
 
@@ -62,6 +63,22 @@
 - `~/.codex/archived_sessions`
 
 因此你能直接在本地看到 token 用量和成本估算，而不需要手动翻 session 文件。
+
+## 版本检测与更新
+
+当前仓库已经接入一份单一的 update feed，应用启动时会做非阻塞检查，菜单栏里也可以手动触发“检查更新”。
+
+但要特别说明当前边界：
+
+- 当前稳定版本默认仍是 **guided download / install**
+- 这表示发现新版本后，codexbar 会提示你，并打开匹配 Apple Silicon / Intel 的安装包下载链接
+- 当前版本**不会假装**已经支持自动替换旧 app 并自动重启
+- `1.1.5 -> 首个支持 updater 的版本` 仍要求人工安装 bootstrap
+- 真正自动更新闭环只会从“首个支持 updater 的版本 -> 下一版本”开始验证
+
+更新 feed 和 rollout 约定见：
+
+- [docs/update-feed-rollout.md](./docs/update-feed-rollout.md)
 
 ## 适合哪些用户
 

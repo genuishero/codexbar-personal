@@ -5,12 +5,14 @@ struct codexBarApp: App {
     @NSApplicationDelegateAdaptor(AppLifecycleObserver.self) private var lifecycleObserver
     @StateObject private var store = TokenStore.shared
     @StateObject private var oauth = OAuthManager.shared
+    @StateObject private var updateCoordinator = UpdateCoordinator.shared
 
     var body: some Scene {
         MenuBarExtra {
             MenuBarView()
                 .environmentObject(store)
                 .environmentObject(oauth)
+                .environmentObject(updateCoordinator)
         } label: {
             MenuBarIconView(store: store)
         }

@@ -251,6 +251,7 @@ private final class AdaptiveMenuScrollHost: NSView {
 struct MenuBarView: View {
     @EnvironmentObject var store: TokenStore
     @EnvironmentObject var oauth: OAuthManager
+    @EnvironmentObject var updateCoordinator: UpdateCoordinator
 
     private let costPanelID = "cost-details-hover-panel"
     private let usageRefreshInterval = OpenAIUsagePollingService.defaultRefreshInterval
@@ -442,6 +443,39 @@ struct MenuBarView: View {
                 }
 
                 Spacer()
+
+                if let availableVersion = self.updateCoordinator.availableVersionLabel {
+                    Text("v\(availableVersion)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.accentColor)
+                }
+
+                Button {
+                    Task { await self.updateCoordinator.handleToolbarAction() }
+                } label: {
+                    Group {
+                        if self.updateCoordinator.isChecking {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: self.updateCoordinator.pendingAvailability != nil
+                                ? "arrow.down.circle.fill"
+                                : "arrow.down.circle")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                    }
+                    .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.borderless)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+                .help(self.updateCoordinator.toolbarHelpText)
+                .foregroundColor(
+                    self.updateCoordinator.pendingAvailability != nil
+                        ? .accentColor
+                        : .secondary
+                )
+                .disabled(self.updateCoordinator.isChecking)
 
                 Button {
                     Task { await refresh(announceResult: true) }

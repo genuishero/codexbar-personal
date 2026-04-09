@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "channel": "stable",
+  "release": {
+    "version": "1.1.6",
+    "publishedAt": "2026-04-09T03:07:07Z",
+    "summary": "首个接入单一 update feed 的稳定版本；当前仍处于引导下载/安装模式，不宣称自动替换闭环。",
+    "releaseNotesURL": "https://github.com/lizhelang/codexbar/releases/tag/v1.1.6",
+    "downloadPageURL": "https://github.com/lizhelang/codexbar/releases/tag/v1.1.6",
+    "deliveryMode": "guidedDownload",
+    "minimumAutomaticUpdateVersion": "1.1.6",
+    "artifacts": [
+      {
+        "architecture": "universal",
+        "format": "dmg",
+        "downloadURL": "https://github.com/lizhelang/codexbar/releases/download/v1.1.6/codexbar-1.1.6-macOS.dmg",
+        "sha256": "60b2352bebb040e275846e8dd2590b13d575a0c5f52165cab4afdbf966289aea"
+      },
+      {
+        "architecture": "universal",
+        "format": "zip",
+        "downloadURL": "https://github.com/lizhelang/codexbar/releases/download/v1.1.6/codexbar-1.1.6-macOS.zip",
+        "sha256": "4c2b7e9bb45bdb35468e265385a1274e43e528bfe31f6eb4bb31029e32319930"
+      }
+    ]
+  }
+}

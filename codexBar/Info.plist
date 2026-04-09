@@ -13,5 +13,7 @@
 			</array>
 		</dict>
 	</array>
+	<key>CodexBarUpdateFeedURL</key>
+	<string>https://raw.githubusercontent.com/lizhelang/codexbar/main/release-feed/stable.json</string>
 </dict>
 </plist>

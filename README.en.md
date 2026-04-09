@@ -57,6 +57,7 @@ That is the main value of the app: switching account or provider does not mean s
 - Multiple API-key accounts under the same provider
 - Fast switching from the menu bar
 - Local usage and cost estimates
+- Version detection driven by a single update feed plus a manual "Check for Updates" entry
 
 Local usage and cost estimates are derived from:
 
@@ -64,6 +65,22 @@ Local usage and cost estimates are derived from:
 - `~/.codex/archived_sessions`
 
 So you can inspect token usage and estimated cost directly from local session history.
+
+## Version Checks and Updates
+
+This repository now ships a single update feed. The app performs a non-blocking update check on launch, and the menu bar UI also exposes a manual "Check for Updates" action.
+
+The current boundary is intentionally narrow:
+
+- the stable feed is still in **guided download / install** mode
+- when a newer version exists, codexbar prompts you and opens the matching Apple Silicon / Intel installer asset
+- the current build does **not** pretend that automatic app replacement and restart are already available
+- `1.1.5 -> the first updater-capable version` still requires a manual bootstrap install
+- the real automatic-update loop should only be validated from `the first updater-capable version -> the next version`
+
+See also:
+
+- [docs/update-feed-rollout.md](./docs/update-feed-rollout.md)
 
 ## Who This Is For
 

@@ -32,6 +32,7 @@ enum L {
     static var noAccounts: String      { zh ? "还没有账号"          : "No Accounts" }
     static var addAccountHint: String  { zh ? "点击下方 + 添加账号"   : "Tap + below to add an account" }
     static var refreshUsage: String    { zh ? "刷新用量"            : "Refresh Usage" }
+    static var checkForUpdates: String { zh ? "检查更新"            : "Check for Updates" }
     static var addAccount: String      { zh ? "添加账号"            : "Add Account" }
     static var openAICSVToolbar: String { zh ? "导入或导出 OpenAI CSV" : "Import or Export OpenAI CSV" }
     static func codexLaunchSwitchedInstanceStarted(_ account: String) -> String {
@@ -52,6 +53,103 @@ enum L {
     static var exportOpenAICSVAction: String { zh ? "导出 OpenAI CSV…" : "Export OpenAI CSV…" }
     static var importOpenAICSVAction: String { zh ? "导入 OpenAI CSV…" : "Import OpenAI CSV…" }
     static var settings: String { zh ? "设置" : "Settings" }
+    static var updateNow: String { zh ? "更新并重启" : "Update & Restart" }
+    static var downloadUpdate: String { zh ? "下载更新" : "Download Update" }
+    static var updateUpToDateTitle: String { zh ? "已是最新版本" : "You're Up to Date" }
+    static func updateUpToDateBody(_ currentVersion: String, _ checkedVersion: String) -> String {
+        zh
+            ? "当前版本 \(currentVersion) 已与 feed 中的最新稳定版本 \(checkedVersion) 一致。"
+            : "The current version \(currentVersion) already matches the latest stable version \(checkedVersion) from the feed."
+    }
+    static func updateAvailableTitle(_ version: String) -> String {
+        zh ? "发现新版本 \(version)" : "Update \(version) Available"
+    }
+    static func updatePromptVersionLine(_ currentVersion: String, _ newVersion: String) -> String {
+        zh
+            ? "当前版本：\(currentVersion)\n最新版本：\(newVersion)"
+            : "Current version: \(currentVersion)\nLatest version: \(newVersion)"
+    }
+    static var updateAutomaticPromptBody: String {
+        zh
+            ? "当前安装满足自动更新前置条件。确认后将进入标准更新执行链，下载、替换并重启应用。"
+            : "This installation satisfies the automatic update prerequisites. Confirm to start the standard download, replace, and restart flow."
+    }
+    static func updateGuidedPromptBody(_ architecture: String, _ format: String) -> String {
+        zh
+            ? "当前版本仍处于受控降级模式。确认后将打开匹配 \(architecture) 的 \(format) 安装包链接，并由你手动完成替换安装。"
+            : "This build is still in guided-install mode. Confirm to open the matching \(architecture) \(format) installer and complete the replacement manually."
+    }
+    static var updateGuidedDownloadStartedTitle: String {
+        zh ? "已打开更新下载" : "Update Download Opened"
+    }
+    static func updateGuidedDownloadStartedBody(_ version: String, _ architecture: String, _ format: String) -> String {
+        zh
+            ? "已为 \(architecture) 打开 \(format) 安装包下载链接（版本 \(version)）。安装完成后请手动替换旧的 codexbar.app，并重新启动。"
+            : "Opened the \(format) installer for \(architecture) (version \(version)). Replace the existing codexbar.app manually after the download finishes, then relaunch it."
+    }
+    static var updateFailedTitle: String { zh ? "更新失败" : "Update Failed" }
+    static func updateInstallActionHelp(_ version: String) -> String {
+        zh ? "下载或安装 \(version)" : "Download or Install \(version)"
+    }
+    static var updateInstallLocationOther: String {
+        zh ? "非标准路径" : "Non-standard Location"
+    }
+    static var updateArchitectureUniversal: String {
+        zh ? "通用构建" : "Universal Build"
+    }
+    static var updateSignatureUnknown: String {
+        zh ? "未能读取应用签名信息" : "Unable to read the app signature"
+    }
+    static var updateBlockerFeedRequiresGuidedDownload: String {
+        zh ? "当前 feed 明确要求走引导下载/安装，不宣称自动替换闭环。" : "The current feed explicitly requires guided download/install instead of automatic replacement."
+    }
+    static func updateBlockerBootstrapRequired(_ currentVersion: String, _ minimumAutomaticVersion: String) -> String {
+        zh
+            ? "Bootstrap / Rollout Gate 未满足：\(currentVersion) 仍需先人工安装到 \(minimumAutomaticVersion) 或更高版本，自动更新闭环才从后续版本开始。"
+            : "Bootstrap / rollout gate not satisfied: \(currentVersion) must first be manually upgraded to \(minimumAutomaticVersion) or later before automatic updates can be closed-loop."
+    }
+    static var updateBlockerAutomaticUpdaterUnavailable: String {
+        zh ? "当前仓库尚未接入可用的成熟自动更新引擎。" : "A mature automatic update engine is not wired into this repository yet."
+    }
+    static func updateBlockerMissingTrustedSignature(_ summary: String) -> String {
+        zh
+            ? "当前安装缺少可用于成熟 updater 的可信签名：\(summary)"
+            : "This installation lacks a trusted signature suitable for a mature updater: \(summary)"
+    }
+    static func updateBlockerGatekeeperAssessment(_ summary: String) -> String {
+        zh
+            ? "当前安装未通过 Gatekeeper / 分发前置条件：\(summary)"
+            : "This installation does not satisfy the Gatekeeper / distribution prerequisites: \(summary)"
+    }
+    static func updateBlockerUnsupportedInstallLocation(_ pathDescription: String) -> String {
+        zh
+            ? "当前安装路径为 \(pathDescription)，尚未纳入可自动替换的受支持范围。"
+            : "The current install location is \(pathDescription), which is not yet in the supported auto-replace matrix."
+    }
+    static var updateErrorMissingFeedURL: String {
+        zh ? "未配置更新 feed URL。" : "The update feed URL is not configured."
+    }
+    static func updateErrorInvalidCurrentVersion(_ version: String) -> String {
+        zh ? "当前版本号无效：\(version)" : "Invalid current version: \(version)"
+    }
+    static func updateErrorInvalidReleaseVersion(_ version: String) -> String {
+        zh ? "feed 中的版本号无效：\(version)" : "Invalid release version in feed: \(version)"
+    }
+    static var updateErrorInvalidResponse: String {
+        zh ? "更新 feed 响应无效。" : "The update feed response is invalid."
+    }
+    static func updateErrorUnexpectedStatusCode(_ statusCode: Int) -> String {
+        zh ? "更新 feed 返回异常状态码：\(statusCode)" : "The update feed returned status code \(statusCode)."
+    }
+    static func updateErrorNoCompatibleArtifact(_ architecture: String) -> String {
+        zh ? "feed 中缺少适用于 \(architecture) 的安装包。" : "The feed does not contain a compatible installer for \(architecture)."
+    }
+    static func updateErrorFailedToOpenDownloadURL(_ url: String) -> String {
+        zh ? "无法打开下载链接：\(url)" : "Failed to open the download URL: \(url)"
+    }
+    static var updateErrorAutomaticUpdateUnavailable: String {
+        zh ? "当前构建尚未接入可执行的自动更新引擎。" : "An executable automatic update engine is not available in this build."
+    }
     static var settingsWindowTitle: String { self.settings }
     static var settingsWindowHint: String {
         zh
