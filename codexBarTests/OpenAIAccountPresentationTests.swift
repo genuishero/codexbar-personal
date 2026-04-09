@@ -53,7 +53,7 @@ final class OpenAIAccountPresentationTests: XCTestCase {
         )
 
         XCTAssertEqual(state.runningThreadCount, 2)
-        XCTAssertEqual(state.runningThreadBadgeTitle, "Running · 2 threads")
+        XCTAssertEqual(state.runningThreadBadgeTitle, "Running 2")
     }
 
     func testNextUseAndRunningThreadsCanCoexistOnSameAccount() {
@@ -72,7 +72,24 @@ final class OpenAIAccountPresentationTests: XCTestCase {
         XCTAssertTrue(state.isNextUseTarget)
         XCTAssertEqual(state.runningThreadCount, 2)
         XCTAssertFalse(state.showsUseAction)
-        XCTAssertEqual(state.runningThreadBadgeTitle, "Running · 2 threads")
+        XCTAssertEqual(state.runningThreadBadgeTitle, "Running 2")
+    }
+
+    func testRowStateShowsCompactChineseRunningThreadBadge() {
+        L.languageOverride = true
+        let account = self.makeAccount(accountId: "acct_busy", isActive: false)
+        let summary = OpenAIRunningThreadAttribution.Summary(
+            availability: .available,
+            runningThreadCounts: ["acct_busy": 2],
+            unknownThreadCount: 0
+        )
+
+        let state = OpenAIAccountPresentation.rowState(
+            for: account,
+            summary: summary
+        )
+
+        XCTAssertEqual(state.runningThreadBadgeTitle, "运行 2")
     }
 
     func testUnavailableSummaryHidesBadgeAndShowsUnavailableText() {

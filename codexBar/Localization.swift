@@ -455,7 +455,7 @@ enum L {
     }
 
     static func runningThreads(_ count: Int) -> String {
-        zh ? "运行中 · \(count) 个线程" : "Running · \(count) thread\(count == 1 ? "" : "s")"
+        zh ? "运行 \(count)" : "Running \(count)"
     }
 
     static func inUseSummary(_ sessions: Int, _ accounts: Int) -> String {
