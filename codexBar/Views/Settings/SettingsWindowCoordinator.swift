@@ -16,6 +16,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     case usage
     case codexAppPath
     case recommendationPrompt
+    case updates
 
     var id: String { self.rawValue }
 }
@@ -132,6 +133,10 @@ final class SettingsWindowCoordinator: ObservableObject {
         }
     }
 
+    var showsManualAccountOrderSection: Bool {
+        self.draft.accountOrderingMode == .manual
+    }
+
     func moveAccount(accountID: String, offset: Int) {
         guard let currentIndex = self.draft.accountOrder.firstIndex(of: accountID) else { return }
         let targetIndex = currentIndex + offset
@@ -188,7 +193,6 @@ final class SettingsWindowCoordinator: ObservableObject {
     }
 
     func reconcileExternalState(config: CodexBarConfig, accounts: [TokenAccount]) {
-        let previousBaseline = self.baseline
         let externalDraft = SettingsWindowDraft(config: config, accounts: accounts)
         self.accounts = accounts
 

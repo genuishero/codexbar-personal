@@ -58,8 +58,8 @@ enum L {
     static var updateUpToDateTitle: String { zh ? "已是最新版本" : "You're Up to Date" }
     static func updateUpToDateBody(_ currentVersion: String, _ checkedVersion: String) -> String {
         zh
-            ? "当前版本 \(currentVersion) 已与 feed 中的最新稳定版本 \(checkedVersion) 一致。"
-            : "The current version \(currentVersion) already matches the latest stable version \(checkedVersion) from the feed."
+            ? "当前版本 \(currentVersion) 已与 GitHub 上的最新稳定版本 \(checkedVersion) 一致。"
+            : "The current version \(currentVersion) already matches the latest stable version \(checkedVersion) on GitHub."
     }
     static func updateAvailableTitle(_ version: String) -> String {
         zh ? "发现新版本 \(version)" : "Update \(version) Available"
@@ -153,13 +153,39 @@ enum L {
     static var settingsWindowTitle: String { self.settings }
     static var settingsWindowHint: String {
         zh
-            ? "左侧切换账户、用量、Codex App 路径和弹窗推荐设置。窗口内的修改会先保存在草稿里，点击保存后再统一生效。"
-            : "Use the sidebar to switch between account, usage, Codex App path, and recommendation prompt settings. Changes stay in a window draft until you save."
+            ? "左侧切换账户、用量、Codex App 路径、弹窗推荐和更新设置。窗口内的修改会先保存在草稿里，点击保存后再统一生效。"
+            : "Use the sidebar to switch between account, usage, Codex App path, recommendation prompt, and update settings. Changes stay in a window draft until you save."
     }
     static var settingsAccountsPageTitle: String { zh ? "账户设置" : "Account Settings" }
     static var settingsUsagePageTitle: String { zh ? "用量设置" : "Usage Settings" }
     static var settingsCodexAppPathPageTitle: String { zh ? "Codex App 路径设置" : "Codex App Path" }
     static var settingsRecommendationPageTitle: String { zh ? "弹窗推荐设置" : "Recommendation Prompt Settings" }
+    static var settingsUpdatesPageTitle: String { zh ? "更新" : "Updates" }
+    static var settingsUpdatesPageHint: String {
+        zh
+            ? "从这里检查 GitHub 上的最新稳定版本，并继续下载或安装当前可用更新。"
+            : "Check the latest stable version on GitHub here, then continue to download or install the current update."
+    }
+    static var settingsUpdatesCurrentVersionTitle: String { zh ? "当前版本" : "Current Version" }
+    static var settingsUpdatesLatestVersionTitle: String { zh ? "GitHub 最新稳定版本" : "Latest Stable Version on GitHub" }
+    static var settingsUpdatesStatusTitle: String { zh ? "更新状态" : "Update Status" }
+    static var settingsUpdatesUnknownVersion: String { zh ? "尚未检查" : "Not Checked Yet" }
+    static var settingsUpdatesCheckAction: String { zh ? "检查 GitHub 上的最新稳定版本" : "Check the Latest Stable Version on GitHub" }
+    static var settingsUpdatesInstallAction: String { zh ? "继续下载或安装更新" : "Continue Download or Install" }
+    static var settingsUpdatesChecking: String { zh ? "正在检查 GitHub 上的最新稳定版本…" : "Checking the latest stable version on GitHub..." }
+    static var settingsUpdatesIdle: String { zh ? "尚未发起更新检查。" : "No update check has been started yet." }
+    static func settingsUpdatesUpToDate(_ version: String) -> String {
+        zh ? "当前版本 \(version) 已与 GitHub 上的最新稳定版本一致。" : "The current version \(version) already matches the latest stable version on GitHub."
+    }
+    static func settingsUpdatesAvailable(_ currentVersion: String, _ latestVersion: String) -> String {
+        zh ? "当前版本 \(currentVersion)，GitHub 上可用最新稳定版本 \(latestVersion)。" : "Current version \(currentVersion); the latest stable version on GitHub is \(latestVersion)."
+    }
+    static func settingsUpdatesExecuting(_ version: String) -> String {
+        zh ? "正在处理 \(version) 的更新动作。" : "Processing the update action for \(version)."
+    }
+    static func settingsUpdatesFailed(_ message: String) -> String {
+        zh ? "更新失败：\(message)" : "Update failed: \(message)"
+    }
     static var usageDisplayModeTitle: String { zh ? "用量显示方式" : "Usage Display" }
     static var remainingUsageDisplay: String { zh ? "剩余用量" : "Remaining Quota" }
     static var usedQuotaDisplay: String { zh ? "已用额度" : "Used Quota" }

@@ -28,6 +28,25 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.draft.autoRoutingPromptMode, .remindOnly)
     }
 
+    func testManualAccountOrderSectionVisibilityFollowsOrderingMode() {
+        let accounts = [
+            self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),
+            self.makeAccount(email: "beta@example.com", accountId: "acct_beta"),
+        ]
+        let coordinator = SettingsWindowCoordinator(
+            config: self.makeConfig(accountOrderingMode: .quotaSort),
+            accounts: accounts
+        )
+
+        XCTAssertFalse(coordinator.showsManualAccountOrderSection)
+
+        coordinator.update(\.accountOrderingMode, to: .manual, field: .accountOrderingMode)
+        XCTAssertTrue(coordinator.showsManualAccountOrderSection)
+
+        coordinator.update(\.accountOrderingMode, to: .quotaSort, field: .accountOrderingMode)
+        XCTAssertFalse(coordinator.showsManualAccountOrderSection)
+    }
+
     func testSaveEmitsChangedDomainRequestsAndReopenReflectsSavedValues() throws {
         let accounts = [
             self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),

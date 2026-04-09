@@ -4,7 +4,7 @@
   "release": {
     "version": "1.1.6",
     "publishedAt": "2026-04-09T03:07:07Z",
-    "summary": "首个接入单一 update feed 的稳定版本；当前仍处于引导下载/安装模式，不宣称自动替换闭环。",
+    "summary": "首个接入单一 update feed 与独立更新设置页的稳定版本；当前仍处于引导下载/安装模式，不宣称自动替换闭环。",
     "releaseNotesURL": "https://github.com/lizhelang/codexbar/releases/tag/v1.1.6",
     "downloadPageURL": "https://github.com/lizhelang/codexbar/releases/tag/v1.1.6",
     "deliveryMode": "guidedDownload",
@@ -14,13 +14,25 @@
         "architecture": "universal",
         "format": "dmg",
         "downloadURL": "https://github.com/lizhelang/codexbar/releases/download/v1.1.6/codexbar-1.1.6-macOS.dmg",
-        "sha256": "60b2352bebb040e275846e8dd2590b13d575a0c5f52165cab4afdbf966289aea"
+        "sha256": "9077ebff411a6656af1a714a8600af707600f811553845e6ab765a786e1a918f"
       },
       {
         "architecture": "universal",
         "format": "zip",
         "downloadURL": "https://github.com/lizhelang/codexbar/releases/download/v1.1.6/codexbar-1.1.6-macOS.zip",
-        "sha256": "4c2b7e9bb45bdb35468e265385a1274e43e528bfe31f6eb4bb31029e32319930"
+        "sha256": "614c91c1748e9157cc07fa1035c2c4afc58e8910703f41c455fd38f250cd810b"
+      },
+      {
+        "architecture": "x86_64",
+        "format": "dmg",
+        "downloadURL": "https://github.com/lizhelang/codexbar/releases/download/v1.1.6/codexbar-1.1.6-macOS-intel.dmg",
+        "sha256": "56c20614f947a0a2f4959406cd6c0265850d02113e5fbb3b04114b65a465ac28"
+      },
+      {
+        "architecture": "x86_64",
+        "format": "zip",
+        "downloadURL": "https://github.com/lizhelang/codexbar/releases/download/v1.1.6/codexbar-1.1.6-macOS-intel.zip",
+        "sha256": "ee699142a2f4d4339cf290425935cf47ad4e56ddd14ba5e6488ca28099aefb76"
       }
     ]
   }
