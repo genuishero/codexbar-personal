@@ -3,7 +3,7 @@
   "channel": "stable",
   "release": {
     "version": "1.1.7",
-    "publishedAt": "2026-04-11T08:48:45Z",
+    "publishedAt": "2026-04-11T08:50:49Z",
     "summary": "延续聚合模式下的原生 fast tier 语义，补齐 service_tier 透传与同额度优先更早重置排序，并修正 OpenAI Accounts 头部对齐；当前仍处于引导下载/安装模式，不宣称自动替换闭环。",
     "releaseNotesURL": "https://github.com/lizhelang/codexbar/releases/tag/v1.1.7",
     "downloadPageURL": "https://github.com/lizhelang/codexbar/releases/tag/v1.1.7",
