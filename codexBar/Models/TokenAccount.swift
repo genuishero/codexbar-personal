@@ -285,6 +285,17 @@ extension TokenAccount {
         self.usageWindowDisplays(mode: .used)
     }
 
+    nonisolated func compactUsageSummary(mode: CodexBarUsageDisplayMode) -> String? {
+        let windows = self.usageWindowDisplays(mode: mode)
+        guard windows.isEmpty == false else { return nil }
+        return windows.map { "\($0.label) \(Int($0.displayPercent))%" }.joined(separator: " · ")
+    }
+
+    nonisolated func compactPrimaryUsageSummary(mode: CodexBarUsageDisplayMode) -> String? {
+        guard let primaryWindow = self.usageWindowDisplays(mode: mode).first else { return nil }
+        return "\(Int(primaryWindow.displayPercent))%"
+    }
+
     nonisolated func usageWindowDisplays(mode: CodexBarUsageDisplayMode) -> [UsageWindowDisplay] {
         self.rateLimitWindows(now: Date()).map {
             UsageWindowDisplay(

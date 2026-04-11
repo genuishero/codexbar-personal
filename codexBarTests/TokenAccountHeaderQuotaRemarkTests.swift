@@ -155,6 +155,27 @@ final class TokenAccountHeaderQuotaRemarkTests: XCTestCase {
         XCTAssertEqual(displays.map(\.displayPercent), [65, 20])
     }
 
+    func testCompactPrimaryUsageSummaryPrefersFiveHourWindowWhenPresent() {
+        let account = makeAccount(
+            primaryUsedPercent: 55,
+            secondaryUsedPercent: 24,
+            primaryLimitWindowSeconds: 18_000,
+            secondaryLimitWindowSeconds: 604_800
+        )
+
+        XCTAssertEqual(account.compactPrimaryUsageSummary(mode: .remaining), "45%")
+    }
+
+    func testCompactPrimaryUsageSummaryUsesWeeklyWindowForFreeAccount() {
+        let account = makeAccount(
+            primaryUsedPercent: 0,
+            secondaryUsedPercent: 0,
+            primaryLimitWindowSeconds: 604_800
+        )
+
+        XCTAssertEqual(account.compactPrimaryUsageSummary(mode: .remaining), "100%")
+    }
+
     func testVisualWarningThresholdUsesRemainingQuota() {
         let warningAccount = makeAccount(
             primaryUsedPercent: 85,

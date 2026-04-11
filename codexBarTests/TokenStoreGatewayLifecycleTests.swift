@@ -141,6 +141,99 @@ final class TokenStoreGatewayLifecycleTests: CodexBarTestCase {
         XCTAssertEqual(gateway.updatedModes, [.aggregateGateway])
     }
 
+    func testGatewayRouteNotificationRefreshesAggregateRoutedAccount() throws {
+        let gateway = OpenAIAccountGatewayControllerSpy()
+        let leaseStore = OpenAIAggregateGatewayLeaseStoreSpy()
+        let store = TokenStore(
+            openAIAccountGatewayService: gateway,
+            aggregateGatewayLeaseStore: leaseStore,
+            codexRunningProcessIDs: { [] }
+        )
+        let account = try self.makeOAuthAccount(
+            accountID: "acct-routed",
+            email: "routed@example.com"
+        )
+
+        store.addOrUpdate(account)
+        gateway.currentRoutedAccountIDValue = account.accountId
+
+        NotificationCenter.default.post(
+            name: .openAIAccountGatewayDidRouteAccount,
+            object: gateway,
+            userInfo: ["accountID": account.accountId]
+        )
+
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+
+        XCTAssertEqual(store.aggregateRoutedAccount?.accountId, account.accountId)
+    }
+
+    func testAggregateModePreservesSwitchSelectionAndRestoresItWhenSwitchingBack() throws {
+        let gateway = OpenAIAccountGatewayControllerSpy()
+        let leaseStore = OpenAIAggregateGatewayLeaseStoreSpy()
+        let oauthAccount = try self.makeOAuthAccount(
+            accountID: "acct-oauth",
+            email: "oauth@example.com"
+        )
+        let storedOAuthAccount = CodexBarProviderAccount.fromTokenAccount(
+            oauthAccount,
+            existingID: oauthAccount.accountId
+        )
+        let compatibleAccount = CodexBarProviderAccount(
+            id: "acct-compatible",
+            kind: .apiKey,
+            label: "compatible",
+            apiKey: "sk-compatible"
+        )
+        let oauthProvider = CodexBarProvider(
+            id: "openai-oauth",
+            kind: .openAIOAuth,
+            label: "OpenAI",
+            activeAccountId: storedOAuthAccount.id,
+            accounts: [storedOAuthAccount]
+        )
+        let compatibleProvider = CodexBarProvider(
+            id: "compatible-provider",
+            kind: .openAICompatible,
+            label: "Compatible",
+            activeAccountId: compatibleAccount.id,
+            accounts: [compatibleAccount]
+        )
+        let config = CodexBarConfig(
+            active: CodexBarActiveSelection(
+                providerId: compatibleProvider.id,
+                accountId: compatibleAccount.id
+            ),
+            openAI: CodexBarOpenAISettings(accountUsageMode: .switchAccount),
+            providers: [oauthProvider, compatibleProvider]
+        )
+        try self.writeConfig(config)
+
+        let store = TokenStore(
+            openAIAccountGatewayService: gateway,
+            aggregateGatewayLeaseStore: leaseStore,
+            codexRunningProcessIDs: { [] }
+        )
+
+        try store.updateOpenAIAccountUsageMode(.aggregateGateway)
+
+        XCTAssertEqual(
+            store.config.openAI.switchModeSelection,
+            CodexBarActiveSelection(
+                providerId: compatibleProvider.id,
+                accountId: compatibleAccount.id
+            )
+        )
+        XCTAssertEqual(store.config.active.providerId, oauthProvider.id)
+        XCTAssertEqual(store.config.active.accountId, storedOAuthAccount.id)
+
+        try store.updateOpenAIAccountUsageMode(.switchAccount)
+
+        XCTAssertEqual(store.config.openAI.accountUsageMode, .switchAccount)
+        XCTAssertEqual(store.config.active.providerId, compatibleProvider.id)
+        XCTAssertEqual(store.config.active.accountId, compatibleAccount.id)
+    }
+
     private func writeConfig(_ config: CodexBarConfig) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -154,6 +247,7 @@ private final class OpenAIAccountGatewayControllerSpy: OpenAIAccountGatewayContr
     var startCount = 0
     var stopCount = 0
     var updatedModes: [CodexBarOpenAIAccountUsageMode] = []
+    var currentRoutedAccountIDValue: String?
 
     func startIfNeeded() {
         self.startCount += 1
@@ -169,6 +263,10 @@ private final class OpenAIAccountGatewayControllerSpy: OpenAIAccountGatewayContr
         accountUsageMode: CodexBarOpenAIAccountUsageMode
     ) {
         self.updatedModes.append(accountUsageMode)
+    }
+
+    func currentRoutedAccountID() -> String? {
+        self.currentRoutedAccountIDValue
     }
 }
 

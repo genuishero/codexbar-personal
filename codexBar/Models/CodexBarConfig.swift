@@ -47,7 +47,7 @@ struct CodexBarGlobalSettings: Codable {
     }
 }
 
-struct CodexBarActiveSelection: Codable {
+struct CodexBarActiveSelection: Codable, Equatable {
     var providerId: String?
     var accountId: String?
 }
@@ -146,6 +146,7 @@ struct CodexBarOpenAISettings: Codable, Equatable {
 
     var accountOrder: [String]
     var accountUsageMode: CodexBarOpenAIAccountUsageMode
+    var switchModeSelection: CodexBarActiveSelection?
     var accountOrderingMode: CodexBarOpenAIAccountOrderingMode
     var manualActivationBehavior: CodexBarOpenAIManualActivationBehavior
     var usageDisplayMode: CodexBarUsageDisplayMode
@@ -154,6 +155,7 @@ struct CodexBarOpenAISettings: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case accountOrder
         case accountUsageMode
+        case switchModeSelection
         case accountOrderingMode
         case manualActivationBehavior
         case usageDisplayMode
@@ -163,6 +165,7 @@ struct CodexBarOpenAISettings: Codable, Equatable {
     init(
         accountOrder: [String] = [],
         accountUsageMode: CodexBarOpenAIAccountUsageMode = .switchAccount,
+        switchModeSelection: CodexBarActiveSelection? = nil,
         accountOrderingMode: CodexBarOpenAIAccountOrderingMode = .quotaSort,
         manualActivationBehavior: CodexBarOpenAIManualActivationBehavior = .updateConfigOnly,
         usageDisplayMode: CodexBarUsageDisplayMode = .used,
@@ -170,6 +173,7 @@ struct CodexBarOpenAISettings: Codable, Equatable {
     ) {
         self.accountOrder = accountOrder
         self.accountUsageMode = accountUsageMode
+        self.switchModeSelection = switchModeSelection
         self.accountOrderingMode = accountOrderingMode
         self.manualActivationBehavior = manualActivationBehavior
         self.usageDisplayMode = usageDisplayMode
@@ -183,6 +187,10 @@ struct CodexBarOpenAISettings: Codable, Equatable {
             CodexBarOpenAIAccountUsageMode.self,
             forKey: .accountUsageMode
         ) ?? .switchAccount
+        self.switchModeSelection = try container.decodeIfPresent(
+            CodexBarActiveSelection.self,
+            forKey: .switchModeSelection
+        )
         self.accountOrderingMode = try container.decodeIfPresent(
             CodexBarOpenAIAccountOrderingMode.self,
             forKey: .accountOrderingMode
@@ -532,6 +540,29 @@ extension CodexBarConfig {
 
     mutating func setOpenAIAccountUsageMode(_ mode: CodexBarOpenAIAccountUsageMode) {
         self.openAI.accountUsageMode = mode
+    }
+
+    mutating func captureSwitchModeSelection() {
+        guard let providerId = self.active.providerId,
+              let accountId = self.active.accountId else {
+            self.openAI.switchModeSelection = nil
+            return
+        }
+
+        self.openAI.switchModeSelection = CodexBarActiveSelection(
+            providerId: providerId,
+            accountId: accountId
+        )
+    }
+
+    mutating func restoreSwitchModeSelectionIfAvailable() {
+        guard let selection = self.openAI.switchModeSelection,
+              let provider = self.provider(id: selection.providerId),
+              provider.accounts.contains(where: { $0.id == selection.accountId }) else {
+            return
+        }
+
+        self.active = selection
     }
 
     mutating func setOpenAIAccountOrderingMode(_ mode: CodexBarOpenAIAccountOrderingMode) {

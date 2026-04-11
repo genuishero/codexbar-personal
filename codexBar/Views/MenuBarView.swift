@@ -700,9 +700,7 @@ struct MenuBarView: View {
         if !store.customProviders.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.16)) {
-                        isProvidersExpanded.toggle()
-                    }
+                    isProvidersExpanded.toggle()
                 } label: {
                     HStack(spacing: 6) {
                         Text("Providers")
@@ -1001,7 +999,13 @@ struct MenuBarView: View {
     ) -> String {
         if activeProvider.kind == .openAIOAuth &&
             self.store.config.openAI.accountUsageMode == .aggregateGateway {
-            return "\(activeProvider.label) · \(L.accountUsageModeAggregateShort)"
+            let routedAccount = self.store.aggregateRoutedAccount ??
+                activeAccount.asTokenAccount(isActive: false)
+            return OpenAIAccountPresentation.aggregateSummaryTitle(
+                providerLabel: activeProvider.label,
+                routedAccount: routedAccount,
+                usageDisplayMode: self.store.config.openAI.usageDisplayMode
+            )
         }
         return "\(activeProvider.label) · \(activeAccount.label)"
     }

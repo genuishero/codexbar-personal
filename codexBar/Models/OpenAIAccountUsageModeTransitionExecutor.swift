@@ -11,6 +11,22 @@ enum OpenAIAccountUsageModeTransitionExecutor {
     ) async throws -> OpenAIManualActivationAction? {
         guard currentMode() != targetMode else { return nil }
 
+        if currentMode() == .aggregateGateway {
+            try applyMode()
+            return .updateConfigOnly
+        }
+
+        if targetMode == .aggregateGateway {
+            do {
+                try applyMode()
+                try await launchNewInstance()
+                return .launchNewInstance
+            } catch {
+                try? rollbackMode()
+                throw error
+            }
+        }
+
         return try await OpenAIManualActivationExecutor.execute(
             configuredBehavior: configuredBehavior,
             trigger: .primaryTap

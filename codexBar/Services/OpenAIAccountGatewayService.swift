@@ -2,6 +2,12 @@ import CryptoKit
 import Foundation
 import Network
 
+extension Notification.Name {
+    static let openAIAccountGatewayDidRouteAccount = Notification.Name(
+        "lzl.codexbar.openai-gateway.did-route-account"
+    )
+}
+
 protocol OpenAIAccountGatewayControlling: AnyObject {
     func startIfNeeded()
     func stop()
@@ -10,13 +16,16 @@ protocol OpenAIAccountGatewayControlling: AnyObject {
         quotaSortSettings: CodexBarOpenAISettings.QuotaSortSettings,
         accountUsageMode: CodexBarOpenAIAccountUsageMode
     )
+    func currentRoutedAccountID() -> String?
 }
 
 enum OpenAIAccountGatewayConfiguration {
     static let host = "localhost"
     static let port: UInt16 = 1456
     static let apiKey = "codexbar-local-gateway"
-    static let upstreamResponsesURL = URL(string: "https://api.openai.com/v1/responses")!
+    static let originator = "codexbar"
+    static let reasoningIncludeMarker = "reasoning.encrypted_content"
+    static let upstreamResponsesURL = URL(string: "https://chatgpt.com/backend-api/codex/responses")!
 
     static var baseURLString: String {
         "http://\(self.host):\(self.port)/v1"
@@ -79,6 +88,7 @@ final class OpenAIAccountGatewayService: OpenAIAccountGatewayControlling {
     private var quotaSortSettings = CodexBarOpenAISettings.QuotaSortSettings()
     private var accountUsageMode: CodexBarOpenAIAccountUsageMode = .switchAccount
     private var stickyBindings: [String: StickyBinding] = [:]
+    private var lastRoutedAccountID: String?
 
     init(
         urlSession: URLSession = .shared,
@@ -133,7 +143,17 @@ final class OpenAIAccountGatewayService: OpenAIAccountGatewayControlling {
             self.accountUsageMode = accountUsageMode
             let knownIDs = Set(accounts.map(\.accountId))
             self.stickyBindings = self.stickyBindings.filter { knownIDs.contains($0.value.accountID) }
+            if let lastRoutedAccountID = self.lastRoutedAccountID,
+               knownIDs.contains(lastRoutedAccountID) == false {
+                self.lastRoutedAccountID = nil
+            }
             self.pruneStickyBindingsLocked()
+        }
+    }
+
+    func currentRoutedAccountID() -> String? {
+        self.stateQueue.sync {
+            self.lastRoutedAccountID
         }
     }
 
@@ -315,13 +335,26 @@ final class OpenAIAccountGatewayService: OpenAIAccountGatewayControlling {
     }
 
     private func bind(stickyKey: String?, accountID: String) {
-        guard let stickyKey, stickyKey.isEmpty == false else { return }
+        var routeChanged = false
         self.stateQueue.sync {
-            self.stickyBindings[stickyKey] = StickyBinding(
-                accountID: accountID,
-                updatedAt: Date()
-            )
+            if self.lastRoutedAccountID != accountID {
+                self.lastRoutedAccountID = accountID
+                routeChanged = true
+            }
+            if let stickyKey, stickyKey.isEmpty == false {
+                self.stickyBindings[stickyKey] = StickyBinding(
+                    accountID: accountID,
+                    updatedAt: Date()
+                )
+            }
             self.pruneStickyBindingsLocked()
+        }
+        if routeChanged {
+            NotificationCenter.default.post(
+                name: .openAIAccountGatewayDidRouteAccount,
+                object: self,
+                userInfo: ["accountID": accountID]
+            )
         }
     }
 
@@ -390,12 +423,13 @@ final class OpenAIAccountGatewayService: OpenAIAccountGatewayControlling {
         _ request: ParsedGatewayRequest,
         account: TokenAccount
     ) async throws -> (response: HTTPURLResponse, bytes: URLSession.AsyncBytes) {
+        let normalizedBody = self.normalizeResponsesRequestBody(request.body)
         var upstreamRequest = URLRequest(url: self.runtimeConfiguration.upstreamResponsesURL)
         upstreamRequest.httpMethod = "POST"
-        upstreamRequest.httpBody = request.body
+        upstreamRequest.httpBody = normalizedBody
         let mutableRequest = (upstreamRequest as NSURLRequest).mutableCopy() as! NSMutableURLRequest
         URLProtocol.setProperty(
-            request.body,
+            normalizedBody,
             forKey: Self.mockRequestBodyPropertyKey,
             in: mutableRequest
         )
@@ -403,7 +437,7 @@ final class OpenAIAccountGatewayService: OpenAIAccountGatewayControlling {
 
         for (name, value) in request.headers {
             switch name {
-            case "host", "content-length", "authorization", "chatgpt-account-id", "connection":
+            case "host", "content-length", "authorization", "chatgpt-account-id", "connection", "originator":
                 continue
             default:
                 upstreamRequest.setValue(value, forHTTPHeaderField: name)
@@ -411,7 +445,8 @@ final class OpenAIAccountGatewayService: OpenAIAccountGatewayControlling {
         }
 
         upstreamRequest.setValue("Bearer \(account.accessToken)", forHTTPHeaderField: "authorization")
-        upstreamRequest.setValue(account.openAIAccountId, forHTTPHeaderField: "chatgpt-account-id")
+        upstreamRequest.setValue(account.remoteAccountId, forHTTPHeaderField: "chatgpt-account-id")
+        upstreamRequest.setValue(OpenAIAccountGatewayConfiguration.originator, forHTTPHeaderField: "originator")
 
         let (bytes, response) = try await self.urlSession.bytes(for: upstreamRequest)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -425,9 +460,14 @@ final class OpenAIAccountGatewayService: OpenAIAccountGatewayControlling {
         request: ParsedGatewayRequest,
         account: TokenAccount
     ) throws -> URLSessionWebSocketTask {
-        guard let upstreamURL = URL(string: "wss://api.openai.com\(request.path)") else {
+        guard var components = URLComponents(
+            url: self.runtimeConfiguration.upstreamResponsesURL,
+            resolvingAgainstBaseURL: false
+        ) else {
             throw URLError(.badURL)
         }
+        components.scheme = "wss"
+        guard let upstreamURL = components.url else { throw URLError(.badURL) }
 
         var upstreamRequest = URLRequest(url: upstreamURL)
         for (name, value) in request.headers {
@@ -439,7 +479,8 @@ final class OpenAIAccountGatewayService: OpenAIAccountGatewayControlling {
                  "sec-websocket-key",
                   "sec-websocket-extensions",
                  "authorization",
-                 "chatgpt-account-id":
+                 "chatgpt-account-id",
+                 "originator":
                 continue
             default:
                 upstreamRequest.setValue(value, forHTTPHeaderField: name)
@@ -447,11 +488,49 @@ final class OpenAIAccountGatewayService: OpenAIAccountGatewayControlling {
         }
 
         upstreamRequest.setValue("Bearer \(account.accessToken)", forHTTPHeaderField: "authorization")
-        upstreamRequest.setValue(account.openAIAccountId, forHTTPHeaderField: "chatgpt-account-id")
+        upstreamRequest.setValue(account.remoteAccountId, forHTTPHeaderField: "chatgpt-account-id")
+        upstreamRequest.setValue(OpenAIAccountGatewayConfiguration.originator, forHTTPHeaderField: "originator")
 
         let task = self.urlSession.webSocketTask(with: upstreamRequest)
         task.resume()
         return task
+    }
+
+    private func normalizeResponsesRequestBody(_ body: Data) -> Data {
+        guard var json = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] else {
+            return body
+        }
+
+        json["store"] = false
+        json["stream"] = true
+        json.removeValue(forKey: "max_output_tokens")
+        json.removeValue(forKey: "temperature")
+        json.removeValue(forKey: "top_p")
+
+        if json["instructions"] == nil || json["instructions"] is NSNull {
+            json["instructions"] = ""
+        }
+        if json["tools"] == nil || json["tools"] is NSNull {
+            json["tools"] = []
+        }
+        if json["parallel_tool_calls"] == nil || json["parallel_tool_calls"] is NSNull {
+            json["parallel_tool_calls"] = false
+        }
+
+        var includes = (json["include"] as? [Any]) ?? []
+        let hasReasoningMarker = includes.contains {
+            ($0 as? String) == OpenAIAccountGatewayConfiguration.reasoningIncludeMarker
+        }
+        if hasReasoningMarker == false {
+            includes.append(OpenAIAccountGatewayConfiguration.reasoningIncludeMarker)
+        }
+        json["include"] = includes
+
+        guard JSONSerialization.isValidJSONObject(json),
+              let data = try? JSONSerialization.data(withJSONObject: json) else {
+            return body
+        }
+        return data
     }
 
     private func establishUpstreamWebSocket(
@@ -930,6 +1009,10 @@ struct OpenAIAccountGatewayTestResponse {
 }
 
 extension OpenAIAccountGatewayService {
+    func currentRoutedAccountIDForTesting() -> String? {
+        self.currentRoutedAccountID()
+    }
+
     func parseRequestForTesting(from data: Data) -> ParsedGatewayRequest? {
         self.parseRequest(from: data)
     }

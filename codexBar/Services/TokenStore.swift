@@ -47,6 +47,7 @@ final class TokenStore: ObservableObject {
     @Published var accounts: [TokenAccount] = []
     @Published private(set) var config: CodexBarConfig
     @Published private(set) var localCostSummary: LocalCostSummary = .empty
+    @Published private(set) var aggregateRoutedAccountID: String?
 
     private let configStore = CodexBarConfigStore()
     private let syncService = CodexSyncService()
@@ -60,6 +61,7 @@ final class TokenStore: ObservableObject {
     private var isRefreshingLocalCostSummary = false
     private var isRefreshingAllUsage = false
     private var refreshingUsageAccountIDs: Set<String> = []
+    private var cancellables: Set<AnyCancellable> = []
     private var aggregateGatewayLeaseProcessIDs: Set<pid_t>
     private var aggregateGatewayLeaseTimer: Timer?
 
@@ -81,6 +83,14 @@ final class TokenStore: ObservableObject {
             self.config = CodexBarConfig()
         }
 
+        NotificationCenter.default.publisher(for: .openAIAccountGatewayDidRouteAccount)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.aggregateRoutedAccountID = self.openAIAccountGatewayService.currentRoutedAccountID()
+            }
+            .store(in: &self.cancellables)
+
         self.publishState()
         self.localCostSummary = self.loadCachedLocalCostSummary()
         self.seedSwitchJournalIfNeeded()
@@ -101,6 +111,11 @@ final class TokenStore: ObservableObject {
 
     var activeModel: String {
         self.config.global.defaultModel
+    }
+
+    var aggregateRoutedAccount: TokenAccount? {
+        guard let aggregateRoutedAccountID else { return nil }
+        return self.accounts.first(where: { $0.accountId == aggregateRoutedAccountID })
     }
 
     func load() {
@@ -300,11 +315,16 @@ final class TokenStore: ObservableObject {
             previousMode: self.config.openAI.accountUsageMode,
             newMode: mode
         )
+        if mode == .aggregateGateway {
+            self.config.captureSwitchModeSelection()
+        }
         self.config.setOpenAIAccountUsageMode(mode)
         if mode == .aggregateGateway,
            let provider = self.oauthProvider() {
             self.config.active.providerId = provider.id
             self.config.active.accountId = provider.activeAccountId
+        } else if mode == .switchAccount {
+            self.config.restoreSwitchModeSelectionIfAvailable()
         }
 
         try self.persist(syncCodex: mode == .aggregateGateway || self.config.active.providerId == self.oauthProvider()?.id)
@@ -442,6 +462,7 @@ final class TokenStore: ObservableObject {
             quotaSortSettings: self.config.openAI.quotaSort,
             accountUsageMode: effectiveGatewayMode
         )
+        self.aggregateRoutedAccountID = self.openAIAccountGatewayService.currentRoutedAccountID()
     }
 
     private var effectiveGatewayMode: CodexBarOpenAIAccountUsageMode {

@@ -31,9 +31,10 @@ struct MenuBarIconView: View {
                 .symbolRenderingMode(.hierarchical)
             if self.store.activeProvider?.kind == .openAIOAuth,
                self.store.config.openAI.accountUsageMode == .aggregateGateway {
-                Text(L.accountUsageModeAggregateShort)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.secondary)
+                if let aggregateUsageSummaryText {
+                    Text(aggregateUsageSummaryText)
+                        .font(.system(size: 10, weight: .medium))
+                }
             } else if let active = store.accounts.first(where: { $0.isActive }) {
                 if active.secondaryExhausted {
                     Text(L.weeklyLimit)
@@ -67,6 +68,12 @@ struct MenuBarIconView: View {
         let label = provider.label.trimmingCharacters(in: .whitespacesAndNewlines)
         if label.count <= 6 { return label }
         return String(label.prefix(6))
+    }
+
+    private var aggregateUsageSummaryText: String? {
+        self.store.aggregateRoutedAccount?.compactPrimaryUsageSummary(
+            mode: self.store.config.openAI.usageDisplayMode
+        )
     }
 
     private func usageSummaryText(for account: TokenAccount) -> String {

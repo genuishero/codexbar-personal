@@ -121,6 +121,19 @@ enum OpenAIAccountPresentation {
         return "\(base) · \(L.runningThreadUnknown(summary.unknownThreadCount))"
     }
 
+    static func aggregateSummaryTitle(
+        providerLabel: String,
+        routedAccount: TokenAccount?,
+        usageDisplayMode: CodexBarUsageDisplayMode
+    ) -> String {
+        guard let routedAccount,
+              let usageSummary = routedAccount.compactUsageSummary(mode: usageDisplayMode) else {
+            return providerLabel
+        }
+
+        return "\(providerLabel) · \(usageSummary)"
+    }
+
     private static func rowState(
         for account: TokenAccount,
         runningThreadCount: Int,

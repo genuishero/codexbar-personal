@@ -96,13 +96,17 @@ final class OpenAIAccountGatewayServiceTests: CodexBarTestCase {
         )
 
         let observedQueue = DispatchQueue(label: "OpenAIAccountGatewayServiceTests.observed")
+        var forwardedURLs: [String] = []
         var forwardedAuthorizations: [String] = []
         var forwardedAccountIDs: [String] = []
-        var forwardedBodies: [String] = []
+        var forwardedOriginators: [String] = []
+        var forwardedBodies: [[String: Any]] = []
 
         MockURLProtocol.handler = { request in
+            let url = request.url?.absoluteString ?? ""
             let authorization = request.value(forHTTPHeaderField: "authorization") ?? ""
             let accountID = request.value(forHTTPHeaderField: "chatgpt-account-id") ?? ""
+            let originator = request.value(forHTTPHeaderField: "originator") ?? ""
             let bodyData =
                 request.httpBody ??
                 (URLProtocol.property(
@@ -110,11 +114,15 @@ final class OpenAIAccountGatewayServiceTests: CodexBarTestCase {
                     in: request
                 ) as? Data) ??
                 Data()
-            let body = String(data: bodyData, encoding: .utf8) ?? ""
+            let body =
+                (try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any]) ??
+                [:]
 
             observedQueue.sync {
+                forwardedURLs.append(url)
                 forwardedAuthorizations.append(authorization)
                 forwardedAccountIDs.append(accountID)
+                forwardedOriginators.append(originator)
                 forwardedBodies.append(body)
             }
 
@@ -144,12 +152,16 @@ final class OpenAIAccountGatewayServiceTests: CodexBarTestCase {
         let firstResponse = try await self.postToGateway(
             service: service,
             stickyKey: "session-1",
-            body: #"{"input":"hello"}"#
+            body: """
+            {"model":"gpt-5.4","input":[{"role":"user","content":[{"type":"input_text","text":"hello"}]}],"max_output_tokens":128,"temperature":0.7,"top_p":0.9,"stream":false}
+            """
         )
         let secondResponse = try await self.postToGateway(
             service: service,
             stickyKey: "session-1",
-            body: #"{"input":"again"}"#
+            body: """
+            {"model":"gpt-5.4","input":[{"role":"user","content":[{"type":"input_text","text":"again"}]}],"max_output_tokens":64,"temperature":0.2,"top_p":0.5}
+            """
         )
 
         XCTAssertEqual(firstResponse.statusCode, 200)
@@ -159,24 +171,39 @@ final class OpenAIAccountGatewayServiceTests: CodexBarTestCase {
 
         let observed = observedQueue.sync {
             (
+                forwardedURLs,
                 forwardedAuthorizations,
                 forwardedAccountIDs,
+                forwardedOriginators,
                 forwardedBodies
             )
         }
 
         XCTAssertEqual(
             observed.0,
-            ["Bearer token-alpha", "Bearer token-beta", "Bearer token-beta"]
+            [
+                "https://example.invalid/v1/responses",
+                "https://example.invalid/v1/responses",
+                "https://example.invalid/v1/responses",
+            ]
         )
         XCTAssertEqual(
             observed.1,
-            ["openai-alpha", "openai-beta", "openai-beta"]
+            ["Bearer token-alpha", "Bearer token-beta", "Bearer token-beta"]
         )
         XCTAssertEqual(
             observed.2,
-            [#"{"input":"hello"}"#, #"{"input":"hello"}"#, #"{"input":"again"}"#]
+            ["openai-alpha", "openai-beta", "openai-beta"]
         )
+        XCTAssertEqual(
+            observed.3,
+            ["codexbar", "codexbar", "codexbar"]
+        )
+        XCTAssertEqual(service.currentRoutedAccountIDForTesting(), "acct-beta")
+
+        self.assertNormalizedBody(observed.4[0], expectedText: "hello")
+        self.assertNormalizedBody(observed.4[1], expectedText: "hello")
+        self.assertNormalizedBody(observed.4[2], expectedText: "again")
     }
 
     private func postToGateway(
@@ -211,5 +238,25 @@ final class OpenAIAccountGatewayServiceTests: CodexBarTestCase {
         text += "\r\n\r\n"
         text += body
         return Data(text.utf8)
+    }
+
+    private func assertNormalizedBody(_ body: [String: Any], expectedText: String) {
+        XCTAssertEqual(body["model"] as? String, "gpt-5.4")
+        XCTAssertEqual(body["store"] as? Bool, false)
+        XCTAssertEqual(body["stream"] as? Bool, true)
+        XCTAssertEqual(body["instructions"] as? String, "")
+        XCTAssertEqual(body["parallel_tool_calls"] as? Bool, false)
+        XCTAssertNil(body["max_output_tokens"])
+        XCTAssertNil(body["temperature"])
+        XCTAssertNil(body["top_p"])
+
+        let tools = body["tools"] as? [Any]
+        XCTAssertEqual(tools?.count, 0)
+
+        let includes = body["include"] as? [String]
+        XCTAssertEqual(includes, ["reasoning.encrypted_content"])
+
+        let text = (((body["input"] as? [[String: Any]])?.first?["content"] as? [[String: Any]])?.first?["text"] as? String)
+        XCTAssertEqual(text, expectedText)
     }
 }

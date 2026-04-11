@@ -183,6 +183,34 @@ final class OpenAIAccountPresentationTests: XCTestCase {
         XCTAssertFalse(state.showsUseAction)
     }
 
+    func testAggregateSummaryTitleUsesQuotaInsteadOfAggregateWord() {
+        let account = self.makeAccount(
+            accountId: "acct_pool",
+            isActive: false,
+            primaryUsedPercent: 20,
+            secondaryUsedPercent: 60
+        )
+
+        let title = OpenAIAccountPresentation.aggregateSummaryTitle(
+            providerLabel: "OpenAI",
+            routedAccount: account,
+            usageDisplayMode: .remaining
+        )
+
+        XCTAssertEqual(title, "OpenAI · 5h 80% · 7d 40%")
+        XCTAssertFalse(title.contains("Aggregate"))
+    }
+
+    func testAggregateSummaryTitleFallsBackToProviderLabelWhenRouteIsUnknown() {
+        let title = OpenAIAccountPresentation.aggregateSummaryTitle(
+            providerLabel: "OpenAI",
+            routedAccount: nil,
+            usageDisplayMode: .remaining
+        )
+
+        XCTAssertEqual(title, "OpenAI")
+    }
+
     func testPlanBadgeTitleShowsOrganizationNameForHoveredTeamAccount() {
         let account = self.makeAccount(
             accountId: "acct_team_hover",
@@ -321,7 +349,9 @@ final class OpenAIAccountPresentationTests: XCTestCase {
         accountId: String,
         isActive: Bool,
         planType: String = "free",
-        organizationName: String? = nil
+        organizationName: String? = nil,
+        primaryUsedPercent: Double = 0,
+        secondaryUsedPercent: Double = 0
     ) -> TokenAccount {
         TokenAccount(
             email: "\(accountId)@example.com",
@@ -330,6 +360,8 @@ final class OpenAIAccountPresentationTests: XCTestCase {
             refreshToken: "refresh-\(accountId)",
             idToken: "id-\(accountId)",
             planType: planType,
+            primaryUsedPercent: primaryUsedPercent,
+            secondaryUsedPercent: secondaryUsedPercent,
             isActive: isActive,
             organizationName: organizationName
         )
