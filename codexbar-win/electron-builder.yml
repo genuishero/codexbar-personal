@@ -19,8 +19,3 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: "CodexBar"
-publish:
-  provider: "github"
-  owner: "GenuisZ"
-  repo: "codexbar-personal"
-  releaseType: "release"
