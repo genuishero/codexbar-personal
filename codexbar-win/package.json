@@ -3,7 +3,7 @@
   "version": "2.1.1",
   "buildNumber": "1",
   "description": "CodexBar for Windows - Multi-account manager for Codex Desktop",
-  "main": "dist/main/index.js",
+  "main": "dist/index.js",
   "author": "GenuisZ",
   "license": "MIT",
   "scripts": {
