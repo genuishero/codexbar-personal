@@ -79,6 +79,9 @@ enum L {
     static var updateErrorMissingFeedURL: String {
         zh ? "未配置更新 feed URL。" : "The update feed URL is not configured."
     }
+    static func updateErrorMissingFeedURL(_ feedURL: String) -> String {
+        zh ? "更新 feed URL 未配置，请在 info.plist 中设置 CodexBarUpdateFeedURL。当前值: \(feedURL)" : "Update feed URL not configured. Current value: \(feedURL)"
+    }
     static func updateErrorInvalidCurrentVersion(_ version: String) -> String {
         zh ? "当前版本号无效:\(version)" : "Invalid current version: \(version)"
     }

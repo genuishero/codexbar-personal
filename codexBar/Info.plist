@@ -14,6 +14,6 @@
 		</dict>
 	</array>
 	<key>CodexBarUpdateFeedURL</key>
-	<string>https://raw.githubusercontent.com/lizhelang/codexbar/main/release-feed/stable.json</string>
+	<string>https://raw.githubusercontent.com/genuishero/codexbar-personal/main/release-feed/stable.json</string>
 </dict>
 </plist>
