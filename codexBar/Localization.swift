@@ -256,6 +256,12 @@ enum L {
     static var openAICSVToolbar: String { zh ? "CSV 导入/导出" : "CSV Import/Export" }
     static var exportOpenAICSVAction: String { zh ? "导出 CSV" : "Export CSV" }
     static var importOpenAICSVAction: String { zh ? "导入 CSV" : "Import CSV" }
+    static var csvExportWarningTitle: String { zh ? "导出包含敏感信息" : "Export Contains Sensitive Data" }
+    static var csvExportWarningMessage: String {
+        zh ? "CSV 文件将包含 access_token、refresh_token 和 id_token。请妥善保管此文件，不要分享给他人。"
+        : "The CSV file will contain access_token, refresh_token, and id_token. Please keep this file secure and do not share it with others."
+    }
+    static var csvExportWarningContinue: String { zh ? "继续导出" : "Continue Export" }
     static var menuUpdateAction: String { zh ? "更新" : "Update" }
     static var noOpenAIAccountsToExport: String {
         zh ? "没有可导出的 OpenAI 账号" : "No OpenAI accounts available to export"

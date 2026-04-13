@@ -1046,12 +1046,31 @@ struct MenuBarView: View {
                 return
             }
 
+            // 显示警告对话框
+            let alert = NSAlert()
+            alert.messageText = L.csvExportWarningTitle
+            alert.informativeText = L.csvExportWarningMessage
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: L.csvExportWarningContinue)
+            alert.addButton(withTitle: L.cancel)
+
+            guard alert.runModal() == .alertFirstButtonReturn else {
+                return
+            }
+
             guard let exportURL = self.openAIAccountCSVPanelService.requestExportURL() else {
                 return
             }
 
             let csv = self.openAIAccountCSVService.makeCSV(from: accounts)
             try csv.write(to: exportURL, atomically: true, encoding: .utf8)
+
+            // 显示成功提示
+            let successAlert = NSAlert()
+            successAlert.messageText = L.openAICSVExportSucceeded(accounts.count)
+            successAlert.alertStyle = .informational
+            successAlert.runModal()
+
             self.showError = nil
         } catch {
             self.showError = error.localizedDescription

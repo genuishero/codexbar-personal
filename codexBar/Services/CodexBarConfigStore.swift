@@ -27,6 +27,7 @@ final class CodexBarConfigStore {
         ("htj", "HTJ", "https://rhino.tjhtj.com", "HTJ_OAI_KEY"),
     ]
     private let switchJournalStore: SwitchJournalStore
+    private let keychain = KeychainTokenStorage.shared
 
     init(switchJournalStore: SwitchJournalStore = SwitchJournalStore()) {
         self.switchJournalStore = switchJournalStore
@@ -59,12 +60,118 @@ final class CodexBarConfigStore {
 
     func load() throws -> CodexBarConfig {
         let data = try Data(contentsOf: CodexPaths.barConfigURL)
-        return try self.decoder.decode(CodexBarConfig.self, from: data)
+        var config = try self.decoder.decode(CodexBarConfig.self, from: data)
+
+        // 从 Keychain 恢复敏感 Token
+        config = self.restoreTokensFromKeychain(config)
+
+        return config
     }
 
     func save(_ config: CodexBarConfig) throws {
-        let data = try self.encoder.encode(config)
+        // 先将 Token 存储到 Keychain
+        self.saveTokensToKeychain(config)
+
+        // 创建不含敏感 Token 的配置副本用于 JSON 存储
+        let sanitizedConfig = self.removeTokensForJSONStorage(config)
+
+        let data = try self.encoder.encode(sanitizedConfig)
         try CodexPaths.writeSecureFile(data, to: CodexPaths.barConfigURL)
+    }
+
+    // MARK: - Keychain Integration
+
+    private func saveTokensToKeychain(_ config: CodexBarConfig) {
+        for provider in config.providers where provider.kind == .openAIOAuth {
+            for account in provider.accounts where account.kind == .oauthTokens {
+                if let accessToken = account.accessToken, !accessToken.isEmpty {
+                    try? keychain.saveAccessToken(accessToken, for: account.id)
+                }
+                if let refreshToken = account.refreshToken, !refreshToken.isEmpty {
+                    try? keychain.saveRefreshToken(refreshToken, for: account.id)
+                }
+                if let idToken = account.idToken, !idToken.isEmpty {
+                    try? keychain.saveIdToken(idToken, for: account.id)
+                }
+            }
+        }
+
+        // 保存 API Key 类型账号的密钥
+        for provider in config.providers where provider.kind == .openAICompatible {
+            for account in provider.accounts where account.kind == .apiKey {
+                if let apiKey = account.apiKey, !apiKey.isEmpty {
+                    try? keychain.saveProviderAPIKey(apiKey, for: provider.id, accountName: account.id)
+                }
+            }
+        }
+    }
+
+    private func restoreTokensFromKeychain(_ config: CodexBarConfig) -> CodexBarConfig {
+        var restoredConfig = config
+
+        for providerIndex in restoredConfig.providers.indices {
+            let provider = restoredConfig.providers[providerIndex]
+
+            if provider.kind == .openAIOAuth {
+                var restoredAccounts: [CodexBarProviderAccount] = []
+                for account in provider.accounts where account.kind == .oauthTokens {
+                    var restoredAccount = account
+                    restoredAccount.accessToken = keychain.loadAccessToken(for: account.id) ?? account.accessToken
+                    restoredAccount.refreshToken = keychain.loadRefreshToken(for: account.id) ?? account.refreshToken
+                    restoredAccount.idToken = keychain.loadIdToken(for: account.id) ?? account.idToken
+                    restoredAccounts.append(restoredAccount)
+                }
+                restoredConfig.providers[providerIndex].accounts = restoredAccounts
+            }
+
+            if provider.kind == .openAICompatible {
+                var restoredAccounts: [CodexBarProviderAccount] = []
+                for account in provider.accounts where account.kind == .apiKey {
+                    var restoredAccount = account
+                    restoredAccount.apiKey = keychain.loadProviderAPIKey(for: provider.id, accountName: account.id) ?? account.apiKey
+                    restoredAccounts.append(restoredAccount)
+                }
+                restoredConfig.providers[providerIndex].accounts = restoredAccounts
+            }
+        }
+
+        return restoredConfig
+    }
+
+    private func removeTokensForJSONStorage(_ config: CodexBarConfig) -> CodexBarConfig {
+        var sanitizedConfig = config
+
+        for providerIndex in sanitizedConfig.providers.indices {
+            var provider = sanitizedConfig.providers[providerIndex]
+
+            if provider.kind == .openAIOAuth {
+                provider.accounts = provider.accounts.map { account in
+                    var sanitizedAccount = account
+                    if account.kind == .oauthTokens {
+                        // 清除敏感 Token，只保留元数据
+                        sanitizedAccount.accessToken = nil
+                        sanitizedAccount.refreshToken = nil
+                        sanitizedAccount.idToken = nil
+                    }
+                    return sanitizedAccount
+                }
+            }
+
+            if provider.kind == .openAICompatible {
+                provider.accounts = provider.accounts.map { account in
+                    var sanitizedAccount = account
+                    if account.kind == .apiKey {
+                        // 清除 API Key
+                        sanitizedAccount.apiKey = nil
+                    }
+                    return sanitizedAccount
+                }
+            }
+
+            sanitizedConfig.providers[providerIndex] = provider
+        }
+
+        return sanitizedConfig
     }
 
     private func migrateFromLegacy() throws -> CodexBarConfig {

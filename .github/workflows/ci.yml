@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main, feature/*]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.3.app
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -project codexbar.xcodeproj \
+            -scheme codexbar \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+  test:
+    runs-on: macos-15
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.3.app
+
+      - name: Run Tests
+        run: |
+          xcodebuild test \
+            -project codexbar.xcodeproj \
+            -scheme codexbar \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ~/Library/Developer/Xcode/DerivedData/*/Logs/Test/*.xcresult
+
+  release:
+    runs-on: macos-15
+    needs: [build, test]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.3.app
+
+      - name: Build Release
+        run: |
+          xcodebuild build \
+            -project codexbar.xcodeproj \
+            -scheme codexbar \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Find App
+        id: find_app
+        run: |
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -path "*Release*" -name "codexbar.app" -type d | head -1)
+          echo "app_path=$APP_PATH" >> $GITHUB_OUTPUT
+
+      - name: Create DMG
+        run: |
+          hdiutil create \
+            -volname "codexbar" \
+            -srcfolder "${{ steps.find_app.outputs.app_path }}" \
+            -ov \
+            -format UDZO \
+            codexbar-${{ github.ref_name }}.dmg
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: codexbar-${{ github.ref_name }}.dmg
+          generate_release_notes: true
