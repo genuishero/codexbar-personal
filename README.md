@@ -1,192 +1,319 @@
-# codexbar
+# 🦞 CodexBar - 个人定制安全增强版
 
-让 Codex Desktop 在多账号 / 多 provider 切换时，尽量不丢掉原本的上下文和历史会话。
+**🌟 安全增强版** - 原项目维护：[@lizhelang](https://github.com/lizhelang/codexbar)  
+**👤 个人定制版**：[@genuishero](https://github.com/genuishero)
 
-`codexbar` 是一个面向 macOS 的菜单栏工具。它解决的不是“再建一套 Codex”，而是一个更具体的问题：
+> 本项目是 [lizhelang/codexbar](https://github.com/lizhelang/codexbar) 的个人定制 fork，增加了**安全增强功能**，专为日常使用优化。
 
-> 切账号、切 provider 之后，你想继续共用同一个 `~/.codex` 历史池，而不是把上下文和 session 拆散。
+[English](./README.en.md) | [中文](./README.md)
 
-[English](./README.en.md)
+---
 
-它的核心思路很简单：
+## ✅ 为什么选择这个版本？
 
-- 不给每个账号单独建一套 `CODEX_HOME`
-- 不拆你的 `~/.codex` 会话池
-- 只把当前选中的 provider / account 同步到 `~/.codex/config.toml` 和 `~/.codex/auth.json`
-- 切换只影响后续新会话，不会把已有历史 session 从同一个池子里“切没了”
+| 功能 | 官方版 | 个人定制版 |
+|------|--------|-----------|
+| 多账号管理 | ✅ | ✅ |
+| 多 Provider 切换 | ✅ | ✅ |
+| 本地 Usage 统计 | ✅ | ✅ |
+| **剪贴板自动清除** | ❌ | ✅ |
+| **首次使用引导** | ❌ | ✅ |
+| **安全状态指示器** | ❌ | ✅ |
+| **自动 Token 刷新** | ❌ | ✅ |
+| **用量预警通知** | ❌ | ✅ |
+| **快捷键切换账号** | ❌ | ✅ |
+| **完整中文翻译** | ❌ | ✅ |
 
-## 界面预览
+---
 
-下面这些图都是**仓库内维护的脱敏演示截图**：界面结构和交互表面与当前产品保持一致，但展示字段已经替换成 demo data，不会暴露真实账号、token，也不依赖你的真实 `~/.codex` / `~/.codexbar` 配置。
+## 🚀 核心安全增强功能
 
-### 1. OpenAI 账号视图
+### 1️⃣ 剪贴板自动清除
+复制敏感信息（API Key / Token）后 **30 秒自动清除剪贴板**，防止密码泄露。
 
-可以直接看到当前模式、账号套餐、5 小时 / 7 天两层额度，以及“真正决定恢复可用性”的重置时间。
-
-<p align="center">
-  <img src="./docs/assets/readme-openai-accounts-demo.png" alt="codexbar OpenAI accounts demo" width="760" />
-</p>
-
-### 2. Provider 管理
-
-同一菜单里可以展开多个 OpenAI 兼容 provider，并在每个 provider 下维护多组 API key 账号。
-
-<p align="center">
-  <img src="./docs/assets/readme-providers-demo.png" alt="codexbar providers demo" width="760" />
-</p>
-
-### 3. 设置页
-
-设置页把账户模式、手动激活行为、Codex Desktop 路径、排序规则和更新检查整合在一个独立窗口里，不需要再手改配置文件。
-
-<p align="center">
-  <img src="./docs/assets/readme-settings-accounts-demo.png" alt="codexbar settings demo" width="1120" />
-</p>
-
-## 它主要解决什么问题
-
-如果你最近会在不同 OpenAI 账号、不同中转站，或者不同 OpenAI 兼容 provider 之间来回切，那么你大概率会遇到同一个痛点：
-
-- 配置切过去了，但上下文像是断了
-- 历史 session 还在磁盘里，却因为切账号 / 切 provider 变得不连贯
-- 反复手改配置文件很烦，恢复现场也麻烦
-
-`codexbar` 想解决的，就是这件事。
-
-## 不拆 `~/.codex`，保留同一个会话池
-
-很多“多账号切换”方案会直接给每个账号单独建一套 `CODEX_HOME`。这样做隔离很强，但代价也很明显：
-
-- 历史被分散到多份目录
-- 切换之后很容易觉得“上下文没了”
-- 需要在不同账号环境之间来回找 session
-
-`codexbar` 选的是另一条路：
-
-- 仍然只保留一个 `~/.codex`
-- 保留 `~/.codex/sessions` 和 `~/.codex/archived_sessions` 这一套共享历史池
-- 当前激活的 provider / account 会同步到 `~/.codex/config.toml` 和 `~/.codex/auth.json`
-- 切换只影响之后发起的新请求和新会话
-
-这也是它最核心的价值：切账号 / 切 provider，不等于把 Codex 原本的历史池拆掉。
-
-## 现在支持什么
-
-- 多 OpenAI OAuth 账号管理
-- 多 OpenAI 兼容 provider 管理
-- 同一 provider 下挂多组 API key
-- 菜单栏里快速切换 provider / account
-- OpenAI 账号的 **手动切换 / 聚合网关** 双模式
-- OpenAI 账号 CSV 导入 / 导出
-- OpenAI 账号支持按用量排序 / 按手动顺序排序
-- 设置页里配置手动激活策略与 Codex.app 路径
-- 本地 usage / 成本统计
-- 单一 update feed 驱动的版本检测与手动“检查更新”
-
-本地 usage / 成本统计来自对下面目录的扫描：
-
-- `~/.codex/sessions`
-- `~/.codex/archived_sessions`
-
-因此你能直接在本地看到 token 用量和成本估算，而不需要手动翻 session 文件。
-
-另外，当前界面还补上了几类更贴近真实日常切换的能力：
-
-- OpenAI 账号支持 **手动切换 / 聚合网关** 两种使用模式
-- 支持导入 / 导出 OpenAI 账号 CSV，方便迁移和批量整理
-- 支持在设置页里切换 OpenAI 账号排序方式：按当前用量排序，或按手动顺序展示
-- 支持设置手动激活行为：只改配置，或直接拉起新的 Codex 实例
-- 当选择“拉起新实例”时，可以在设置页指定 Codex.app 的本地路径；路径失效时会自动回退系统探测
-
-## 版本检测与更新
-
-当前仓库已经接入一份单一的 update feed，应用启动时会做非阻塞检查，菜单栏里也可以手动触发“检查更新”。
-
-但要特别说明当前边界：
-
-- 当前稳定版本默认仍是 **guided download / install**
-- 这表示发现新版本后，codexbar 会在菜单和更新状态里显示可用版本，由你继续打开匹配 Apple Silicon / Intel 的安装包下载链接
-- 当前版本**不会假装**已经支持自动替换旧 app 并自动重启
-- `1.1.5 -> 首个支持 updater 的版本` 仍要求人工安装 bootstrap
-- 真正自动更新闭环只会从“首个支持 updater 的版本 -> 下一版本”开始验证
-
-更新 feed 和 rollout 约定见：
-
-- [docs/update-feed-rollout.md](./docs/update-feed-rollout.md)
-
-## 适合哪些用户
-
-如果你符合下面这些情况，`codexbar` 会比较有用：
-
-- 你会同时使用 OpenAI 官方账号和第三方 OpenAI 兼容 provider
-- 你同一个 provider 下会维护多组 API key
-- 你不想每次切换都手改 `config.toml`
-- 你希望保留同一个 `~/.codex` 的历史池和 resume 体验
-
-## OpenAI 登录方式
-
-当前 OpenAI 登录采用“浏览器授权 + localhost 回调捕获，必要时可手工粘贴回调”的方式。入口在菜单底部工具栏的人像加号按钮：
-
-1. 点击登录按钮
-2. 在浏览器里完成授权
-3. 当浏览器跳到 `http://localhost:1455/auth/callback?...` 时，codexbar 会自动捕获回调
-4. codexbar 直接完成 token 交换并导入账号
-
-如果自动捕获失败，仍然可以把完整回调 URL 或单独的 `code` 手工粘贴回窗口。
-
-## 成本与账单说明
-
-这里展示的是**本地 usage estimate**，不是官方账单页面的精确账单。
-
-需要特别说明：
-
-- token 数量更适合作为稳定指标
-- 金额是基于模型价格表的估算
-- 对自定义 OpenAI 兼容 provider，显示的金额不一定等于真实供应商扣费
-
-如果某个第三方 provider 的价格策略和 OpenAI 官方定价不同，那 README 和界面里显示的美元金额都只能视为近似估算，不应直接当作实际账单。
-
-## 项目边界
-
-当前版本重点是：
-
-- 多账号管理
-- 多 provider 切换
-- 共享 `~/.codex` 会话池
-- 本地 usage / 成本统计
-
-它不会内置任何私有 provider、私有 API key、私有账号配置。你需要在自己的环境里自行添加这些内容。
-
-## 运行环境
-
-- macOS 13+
-- [Codex Desktop / CLI](https://github.com/openai/codex)
-- Xcode 15+（如果你要本地编译）
-
-## 本地构建
-
-```sh
-git clone https://github.com/lizhelang/codexbar.git
-cd codexbar
-open codexbar.xcodeproj
+```bash
+# 示例：复制 API Key 后 30 秒自动清空
+echo "sk-xxx" | pbcopy  # 30秒后 pbpaste 为空
 ```
 
-然后：
+### 2️⃣ 快速开始引导
+首次启动时显示 **4 步引导流程**：
+1. 📝 添加账号
+2. 🔄 选择账号
+3. ⌨️ 配置快捷键
+4. ⚠️ 设置用量预警
 
-1. 在 Xcode 里选择自己的签名团队
-2. 构建并运行 `codexbar` target
+### 3️⃣ 安全状态指示器
+在设置页显示安全功能开启状态：
+- 🔒 加密存储
+- 🛡️ 剪贴板保护
+- 🔄 自动 Token 刷新
+- ⚠️ 用量预警
+- ⌨️ 快捷键支持
 
-## 致谢
+### 4️⃣ 自动 Token 刷新
+OAuth Token 过期前 **2 小时自动刷新**，保持账号始终可用。
 
-这个项目参考并改造了下面两个 MIT 许可证项目中的思路与部分实现：
+### 5️⃣ 用量预警通知
+当账号用量达到阈值时（默认 80%）触发系统通知：
+```
+⚠️ 用量预警  
+当前用量已达 80%，建议关注额度使用情况
+```
 
-- [xmasdong/codexbar](https://github.com/xmasdong/codexbar)
-- [steipete/CodexBar](https://github.com/steipete/CodexBar)
+### 6️⃣ 快捷键支持
+使用快捷键 **快速切换账号**：
+- `Cmd + Shift + 1`：切换到第 1 个账号
+- `Cmd + Shift + 2`：切换到第 2 个账号
+- ...
+- `Cmd + Shift + 5`：切换到第 5 个账号
 
-详细说明见：
+---
 
-- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+## 📦 安装指南
 
-## License
+### 方法 1：从 GitHub Release 下载（推荐）
 
-[MIT](LICENSE)
+1. 访问 [Releases](https://github.com/genuishero/codexbar-personal/releases)
+2. 下载 `codexbar-v2.0.0.dmg`
+3. 双击挂载 DMG
+4. 将 `codexbar.app` 拖到 Applications 文件夹
+5. 启动应用
+
+### 方法 2：本地构建
+
+```bash
+# 克隆你的私有仓库
+git clone https://github.com/genuishero/codexbar-personal.git
+cd codexbar-personal
+
+# 用 Xcode 构建
+open codexbar.xcodeproj
+# 选择 Xcode → Product → Build
+```
+
+---
+
+## 🎮 使用说明
+
+### 首次启动流程
+
+1. **运行应用** → 自动弹出快速开始引导
+2. **步骤 1**：点击菜单栏 `+` 按钮添加账号
+3. **步骤 2**：选择你常用的 OpenAI 账号
+4. **步骤 3**：配置快捷键（可选）
+5. **步骤 4**：设置用量预警阈值（默认 80%）
+
+### 添加账号
+
+#### OpenAI OAuth 方式
+1. 点击菜单栏 `+` 按钮
+2. 选择 `Add OpenAI Account`
+3. 在浏览器中完成授权
+4. 自动跳转回调或手动粘贴 URL
+
+#### CSV 导入
+1. 准备 `accounts.csv` 文件：
+   ```csv
+   email,account_id,openai_account_id,access_token,refresh_token,id_token,expires_at,plan_type,primary_used_percent,secondary_used_percent,is_active
+   test@example.com,act_abc,org_xyz,sk_token,refresh_tok,id_tok,2026-12-31T00:00:00Z,plus,10,5,true
+   ```
+2. 菜单栏 → `Import CSV` → 选择文件
+3. 自动验证并导入账号
+
+### 快捷键使用
+
+在 **设置页 → Security** 中启用快捷键后：
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Cmd + Shift + 1` | 切换到第 1 个账号 |
+| `Cmd + Shift + 2` | 切换到第 2 个账号 |
+| `Cmd + Shift + 3` | 切换到第 3 个账号 |
+| `Cmd + Shift + 4` | 切换到第 4 个账号 |
+| `Cmd + Shift + 5` | 切换到第 5 个账号 |
+
+### 用量预警配置
+
+1. 打开 **设置页**
+2. 切换到 **Security** 标签
+3. 找到 `用量预警` 开关
+4. 调整 `Quota Warning Threshold`（默认 80%）
+
+当任一账号用量达到阈值时，会显示系统通知：
+```
+⚠️ 用量预警
+目前用量已达 80%
+账号: test@example.com
+套餐: Plus
+```
+
+### 安全状态查看
+
+在 **设置页 → Security** 页显示所有安全功能状态：
+- 🔒 **加密存储**：账号凭据加密保存
+- 🛡️ **剪贴板保护**：自动清除敏感信息
+- 🔄 **自动 Token 刷新**：过期前自动更新
+- ⚠️ **用量预警**：达到阈值时通知
+- ⌨️ **快捷键支持**：快速切换账号
+
+---
+
+## 🏗️ 功能设计
+
+### 多账号管理架构
+
+```
+CodexBar (菜单栏)
+├── OpenAI Accounts (多个)
+│   ├── Account 1: email1@domain.com (Plus)
+│   ├── Account 2: email2@domain.com (Team)
+│   └── Account 3: email3@domain.com (Free)
+├── Custom Providers (多个)
+│   └── Provider A
+│       ├── Account A1: API Key 1
+│       └── Account A2: API Key 2
+└── Active Account (当前激活)
+    └── 同步到 ~/.codex/auth.json
+```
+
+### 核心机制
+
+| 功能 | 实现方式 |
+|------|---------|
+| 账号同步 | 更新 `~/.codex/config.toml` + `~/.codex/auth.json` |
+| 会话池共享 | 共用 `~/.codex/sessions` 和 `~/.codex/archived_sessions` |
+| 用量统计 | 扫描本地 session 文件分析 token usage |
+| Token 刷新 | 后台 Timer 每小时检查，过期前 2 小时刷新 |
+| 剪贴板保护 | 复制后启动 30 秒 Timer 自动清除 |
+| 快捷键 | 监听 `Cmd + Shift + [1-5]` 系统事件 |
+
+### 安全设计原则
+
+1. **最小权限原则**
+   - 只读取 `~/.codex` 目录
+   - 不上传任何本地数据
+   - 本地加密存储敏感信息
+
+2. **剪贴板保护**
+   - 复制敏感信息后 30 秒自动清除
+   - 支持手动提前清除
+   - 不记录任何剪贴板历史
+
+3. **Token 刷新**
+   - OAuth Token 过期前 2 小时自动刷新
+   - 使用 Refresh Token 交换新 Token
+   - 失败时弹窗提示重新授权
+
+4. **用量预警**
+   - 可配置阈值（默认 80%）
+   - 每分钟检查一次
+   - 系统通知提醒
+
+---
+
+## 🔄 同步官方更新
+
+当官方仓库有重要更新时，你可以同步到你的定制版：
+
+```bash
+cd ~/Documents/GithubProject/codexbar-personal
+
+# 抓取官方最新代码
+git fetch upstream
+
+# 合并到本地 main
+git checkout main
+git merge upstream/main
+
+# 解决冲突（如有）
+# ...
+
+# 推送到你的 GitHub
+git push origin main
+
+# 重新编译发布
+# gh release create v2.1.0 ~/Downloads/codexbar-v2.1.0.dmg
+```
+
+远程仓库配置：
+- `origin` → `https://github.com/genuishero/codexbar-personal.git`
+- `upstream` → `https://github.com/lizhelang/codexbar.git`
+
+---
+
+## 🐛 故障排除
+
+### Q: 应用启动后没有显示账号
+A: 检查 `~/.codex/` 目录是否存在，或者通过菜单栏 `+` 添加账号
+
+### Q: 快捷键不生效
+A: 在 **设置页 → Security** 启用快捷键功能
+
+### Q: Token 刷新失败
+A: 检查 Token 是否过期，可能需要手动重新授权
+
+### Q: 用量预警不通知
+A: 检查系统设置 → 通知 → codexbar 是否启用通知权限
+
+### Q: 剪贴板清除不工作
+A: macOS 可能限制自动清除，检查系统设置 → 隐私与安全性 → 辅助功能
+
+---
+
+## 📋 技术栈
+
+| 类别 | 技术 |
+|------|------|
+| 语言 | Swift / SwiftUI |
+| 架构 | Menu Bar Extra + Settings Window |
+| 状态管理 | @Published ObservableObject |
+| 数据持久化 | UserDefaults + UserStorage |
+| 网络 | URLSession + Async/Await |
+| 更新机制 | JSON Feed + Manual Check |
+
+---
+
+## 📄 license
+
+本项目使用 **MIT License**，与原项目一致。
+
+详细说明见：[LICENSE](LICENSE)
+
+---
+
+## 🙏 致谢
+
+本项目基于以下开源项目：
+
+- [lizhelang/codexbar](https://github.com/lizhelang/codexbar) - 原作者维护版本
+- [xmasdong/codexbar](https://github.com/xmasdong/codexbar) - 参考项目
+- [steipete/CodexBar](https://github.com/steipete/CodexBar) - 参考项目
+
+---
+
+## 📞 支持
+
+- **项目地址**：https://github.com/genuishero/codexbar-personal
+- **Release 下载**：https://github.com/genuishero/codexbar-personal/releases
+- **问题反馈**：创建 GitHub Issue
+
+---
+
+## 📝 更新日志
+
+### v2.0.0 (2026-04-13) 🎉
+**初始安全增强版发布**
+
+- ✅ 剪贴板自动清除功能（30秒）
+- ✅ 首次使用快速开始引导
+- ✅ 安全状态指示器 UI
+- ✅ 自动 Token 刷新服务
+- ✅ 用量预警通知系统
+- ✅ 快捷键切换账号（Cmd+Shift+1-5）
+- ✅ 完整中文翻译支持
+- ✅ GitHub Releases 自动化流程
+
+---
+
+*最后更新: 2026-04-13*
