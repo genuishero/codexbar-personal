@@ -15,40 +15,20 @@ struct AccountRowView: View {
     @State private var isHoveringPlanBadge = false
 
     var body: some View {
-        HStack(spacing: 4) {
-            if self.usesExpandedTeamBadgeHoverLayout == false {
-                Circle()
-                    .fill(statusColor)
-                    .frame(width: 7, height: 7)
-            }
+        HStack(spacing: 8) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 10, height: 10)
 
             self.planBadge
 
-            if self.usesExpandedTeamBadgeHoverLayout == false {
-                usageSummary
+            usageSummary
 
-                if let runningThreadBadgeTitle = rowState.runningThreadBadgeTitle {
-                    Text(runningThreadBadgeTitle)
-                        .font(.system(size: 9, weight: .medium))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.14))
-                        .foregroundColor(.secondary)
-                        .cornerRadius(4)
-                }
-
-                if self.rowState.isNextUseTarget {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.accentColor)
-                        .font(.system(size: 10))
-                }
-            }
-
-            Spacer(minLength: self.usesExpandedTeamBadgeHoverLayout ? 0 : 6)
+            Spacer()
 
             Button(action: onDelete) {
                 Image(systemName: "trash")
-                    .font(.system(size: 10))
+                    .font(.system(size: 12))
             }
             .buttonStyle(.borderless)
             .foregroundColor(.secondary)
@@ -56,13 +36,13 @@ struct AccountRowView: View {
             if account.tokenExpired {
                 Button(L.reauth, action: onReauth)
                     .buttonStyle(.borderedProminent)
-                    .controlSize(.mini)
-                    .font(.system(size: 10, weight: .medium))
+                    .controlSize(.small)
+                    .font(.system(size: 12, weight: .medium))
                     .tint(.orange)
             } else if !account.isBanned {
                 Button(action: onRefresh) {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 10))
+                        .font(.system(size: 12))
                         .rotationEffect(.degrees(isRefreshing ? 360 : 0))
                         .animation(
                             isRefreshing
@@ -80,28 +60,28 @@ struct AccountRowView: View {
                         onActivate(OpenAIAccountPresentation.primaryManualActivationTrigger)
                     }
                         .buttonStyle(.borderedProminent)
-                        .controlSize(.mini)
-                        .font(.system(size: 10, weight: .medium))
+                        .controlSize(.small)
+                        .font(.system(size: 12, weight: .medium))
                 }
             }
         }
-        .padding(.vertical, 5)
-        .padding(.leading, 16)   // indent under email header
-        .padding(.trailing, 8)
+        .padding(.vertical, 8)
+        .padding(.leading, 16)
+        .padding(.trailing, 10)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: 8)
                 .fill(rowBackgroundColor)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(rowBorderColor, lineWidth: 0.6)
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(rowBorderColor, lineWidth: 1)
         }
         .overlay(alignment: .leading) {
             if self.rowState.isNextUseTarget {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Color.accentColor)
-                    .frame(width: 3)
-                    .padding(.vertical, 4)
+                    .frame(width: 4)
+                    .padding(.vertical, 6)
             }
         }
         .contextMenu {
@@ -129,19 +109,21 @@ struct AccountRowView: View {
 
     @ViewBuilder
     private var usageSummary: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 10) {
             ForEach(Array(account.usageWindowDisplays(mode: self.usageDisplayMode).enumerated()), id: \.offset) { index, window in
                 if index > 0 {
                     Text(L.bulletSeparator)
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary.opacity(0.5))
                 }
-                Text(window.label)
-                    .font(.system(size: 9))
-                    .foregroundColor(.secondary)
-                Text("\(Int(window.displayPercent))%")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(usageColor(window))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(window.label)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    Text("\(Int(window.displayPercent))%")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(usageColor(window))
+                }
             }
         }
     }
@@ -153,28 +135,14 @@ struct AccountRowView: View {
                 isHovered: self.isHoveringPlanBadge
             )
         )
-        .font(.system(size: 9, weight: .medium))
+        .font(.system(size: 11, weight: .semibold))
         .lineLimit(1)
         .truncationMode(.tail)
-        .allowsTightening(self.usesExpandedTeamBadgeHoverLayout)
-        .minimumScaleFactor(self.usesExpandedTeamBadgeHoverLayout ? 0.85 : 1)
-        .layoutPriority(self.usesExpandedTeamBadgeHoverLayout ? 1 : 0)
-        .padding(.horizontal, 4)
-        .padding(.vertical, 1)
-        .background(planBadgeColor.opacity(0.15))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(planBadgeColor.opacity(0.18))
         .foregroundColor(planBadgeColor)
-        .cornerRadius(3)
-        .contentShape(RoundedRectangle(cornerRadius: 3))
-        .onHover { isHovering in
-            self.isHoveringPlanBadge = isHovering
-        }
-    }
-
-    private var usesExpandedTeamBadgeHoverLayout: Bool {
-        OpenAIAccountPresentation.usesExpandedTeamBadgeHoverLayout(
-            for: self.account,
-            isHovered: self.isHoveringPlanBadge
-        )
+        .cornerRadius(4)
     }
 
     private var statusColor: Color {

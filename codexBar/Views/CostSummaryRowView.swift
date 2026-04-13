@@ -6,30 +6,32 @@ struct CostSummaryRowView: View {
     let compactTokens: (Int) -> String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(L.costLabel)
-                    .font(.system(size: 12, weight: .semibold))
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-            }
+        HStack {
+            Text(L.costLabel)
+                .font(.system(size: 12, weight: .semibold))
 
-            Text("\(L.todayCost): \(currency(summary.todayCostUSD)) · \(compactTokens(summary.todayTokens)) \(L.tokensCount)")
+            Spacer()
+
+            Text("\(L.todayCost): \(currency(summary.todayCostUSD))")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
-                .lineLimit(1)
 
-            Text("\(L.last30DaysCost): \(currency(summary.last30DaysCostUSD)) · \(compactTokens(summary.last30DaysTokens)) \(L.tokensCount)")
+            Text("·")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary.opacity(0.5))
+
+            Text("\(L.last30DaysCost): \(currency(summary.last30DaysCostUSD))")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
-                .lineLimit(1)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 6)
                 .fill(Color.secondary.opacity(0.06))
         )
     }

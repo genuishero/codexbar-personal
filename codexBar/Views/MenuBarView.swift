@@ -394,13 +394,13 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(L.codexbar)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 14, weight: .bold))
 
                 if let active = store.activeProvider {
                     Text(active.label)
-                        .font(.system(size: 10, weight: .medium))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
                         .background(Color.accentColor.opacity(0.12))
                         .foregroundColor(.accentColor)
                         .cornerRadius(4)
@@ -408,9 +408,9 @@ struct MenuBarView: View {
 
                 if !store.accounts.isEmpty {
                     Text(L.available(availableCount, store.accounts.count))
-                        .font(.system(size: 10))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
+                        .font(.system(size: 11))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
                         .background(availableCount > 0 ? Color.green.opacity(0.15) : Color.red.opacity(0.15))
                         .foregroundColor(availableCount > 0 ? .green : .red)
                         .cornerRadius(4)
@@ -427,33 +427,33 @@ struct MenuBarView: View {
                                 .controlSize(.small)
                         } else {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(size: 13, weight: .semibold))
                         }
                     }
-                    .frame(width: 16, height: 16)
+                    .frame(width: 18, height: 18)
                 }
                 .buttonStyle(.borderless)
-                .frame(width: 24, height: 24)
+                .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
                 .help(L.refreshUsage)
                 .foregroundColor(isRefreshing ? .accentColor : .secondary)
                 .disabled(isRefreshing)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
 
             if let activeProvider = store.activeProvider,
                let activeAccount = store.activeProviderAccount {
                 Divider()
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(self.activeProviderSummaryTitle(activeProvider: activeProvider, activeAccount: activeAccount))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                     Text("Model: \(store.activeModel)")
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.vertical, 10)
             }
 
             if let pendingAvailability = self.updateCoordinator.pendingAvailability {
@@ -525,14 +525,14 @@ struct MenuBarView: View {
 
             Divider()
 
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 if let lastUpdate = store.accounts.compactMap({ $0.lastChecked }).max() {
                     Text(relativeTime(lastUpdate))
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 } else if let provider = store.activeProvider {
                     Text(provider.hostLabel)
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
 
@@ -547,7 +547,7 @@ struct MenuBarView: View {
                     }
                 } label: {
                     Image(systemName: OpenAIAccountCSVToolbarUI.symbolName)
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                 }
                 .menuStyle(.borderlessButton)
                 .accessibilityLabel(L.openAICSVToolbar)
@@ -569,7 +569,7 @@ struct MenuBarView: View {
                     }
                 } label: {
                     Image(systemName: "person.crop.circle.badge.plus")
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                 }
                 .menuStyle(.borderlessButton)
                 .accessibilityLabel("login toolbar button")
@@ -769,24 +769,23 @@ struct MenuBarView: View {
 
     @ViewBuilder
     private func openAIAccountGroupsView(_ groups: [OpenAIAccountGroup]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             ForEach(groups) { group in
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(group.email)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.primary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .layoutPriority(1)
 
                         if let remark = group.headerQuotaRemark(now: now) {
-                            Text(remark)
-                                .font(.system(size: 9, weight: .medium))
+                            Text("重置: \(remark)")
+                                .font(.system(size: 11, weight: .medium))
                                 .monospacedDigit()
                                 .foregroundColor(.orange)
                                 .lineLimit(1)
-                                .minimumScaleFactor(0.8)
                         }
                     }
                     .padding(.leading, 4)
