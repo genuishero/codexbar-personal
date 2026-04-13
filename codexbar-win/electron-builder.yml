@@ -19,3 +19,4 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: "CodexBar"
+publish: null
