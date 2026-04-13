@@ -2,18 +2,18 @@
   "schemaVersion": 1,
   "channel": "stable",
   "release": {
-    "version": "2.1.0",
-    "publishedAt": "2026-04-13T19:30:00Z",
-    "summary": "安全增强版 - Keychain 存储、快捷键、用量预警",
-    "releaseNotesURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.1.0",
-    "downloadPageURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.1.0",
+    "version": "2.1.1",
+    "publishedAt": "2026-04-13T20:00:00Z",
+    "summary": "本地账号导入 - 从 ~/.codex 直接发现并导入已登录账号",
+    "releaseNotesURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.1.1",
+    "downloadPageURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.1.1",
     "deliveryMode": "guidedDownload",
     "artifacts": [
       {
         "architecture": "universal",
         "format": "dmg",
-        "downloadURL": "https://github.com/genuishero/codexbar-personal/releases/download/v2.1.0/codexbar-v2.1.0.dmg",
-        "sha256": "4253826fcb9427a7ad7235fb7f9f261eed33a97bac14ae46e245f29d5d468692"
+        "downloadURL": "https://github.com/genuishero/codexbar-personal/releases/download/v2.1.1/codexbar-v2.1.1.dmg",
+        "sha256": "ee0831e73c35eb379a9e02a01564ecf8e228322b8e134505d4ae92463877224d"
       }
     ]
   }
