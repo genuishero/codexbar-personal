@@ -2,18 +2,18 @@
   "schemaVersion": 1,
   "channel": "stable",
   "release": {
-    "version": "2.0.0",
-    "publishedAt": "2026-04-13T09:53:05Z",
-    "summary": "安全增强版 - 剪贴板清除、快速引导、用量预警",
-    "releaseNotesURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.0.0",
-    "downloadPageURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.0.0",
+    "version": "2.1.0",
+    "publishedAt": "2026-04-13T19:30:00Z",
+    "summary": "安全增强版 - Keychain 存储、快捷键、用量预警",
+    "releaseNotesURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.1.0",
+    "downloadPageURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.1.0",
     "deliveryMode": "guidedDownload",
     "artifacts": [
       {
         "architecture": "universal",
         "format": "dmg",
-        "downloadURL": "https://github.com/genuishero/codexbar-personal/releases/download/v2.0.0/codexbar-v2.0.0.dmg",
-        "sha256": "9702cd82e3ec0b13ee041143560830998d38aae66cf6defedf89b244e5b42364"
+        "downloadURL": "https://github.com/genuishero/codexbar-personal/releases/download/v2.1.0/codexbar-v2.1.0.dmg",
+        "sha256": "placeholder"
       }
     ]
   }
