@@ -61,10 +61,10 @@ final class TokenAccountHeaderQuotaRemarkTests: XCTestCase {
         XCTAssertNil(account.headerQuotaRemark(now: Date()))
     }
 
-    func testNearestResetWinsWhenBothWindowsExist() {
+    func testLaterExhaustedWindowWinsWhenBothWindowsExist() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let primaryResetAt = now.addingTimeInterval((2 * 3_600) + (10 * 60))
-        let secondaryResetAt = now.addingTimeInterval((17 * 86_400) + (8 * 3_600))
+        let secondaryResetAt = now.addingTimeInterval((6 * 86_400) + (8 * 3_600))
         let account = makeAccount(
             primaryUsedPercent: 100,
             secondaryUsedPercent: 100,
@@ -74,7 +74,22 @@ final class TokenAccountHeaderQuotaRemarkTests: XCTestCase {
             secondaryLimitWindowSeconds: 604_800
         )
 
-        XCTAssertEqual(account.headerQuotaRemark(now: now), "2时10分")
+        XCTAssertEqual(account.headerQuotaRemark(now: now), "6天8时")
+    }
+
+    func testWeeklyExhaustedPrefersWeeklyResetEvenWhenPrimaryResetIsSooner() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let account = makeAccount(
+            planType: "plus",
+            primaryUsedPercent: 7,
+            secondaryUsedPercent: 100,
+            primaryResetAt: now.addingTimeInterval((4 * 3_600) + (51 * 60)),
+            secondaryResetAt: now.addingTimeInterval((5 * 24 * 3_600) + (4 * 3_600)),
+            primaryLimitWindowSeconds: 18_000,
+            secondaryLimitWindowSeconds: 604_800
+        )
+
+        XCTAssertEqual(account.headerQuotaRemark(now: now), "5天4时")
     }
 
     func testNearestResetIgnoresPastWindowWhenFutureWindowExists() {
@@ -89,6 +104,49 @@ final class TokenAccountHeaderQuotaRemarkTests: XCTestCase {
         )
 
         XCTAssertEqual(account.headerQuotaRemark(now: now), "3时30分")
+    }
+
+    func testHeaderQuotaRemarkClampsPrimaryResetToFiveHourWindowFromLastChecked() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let account = makeAccount(
+            primaryUsedPercent: 90,
+            secondaryUsedPercent: 0,
+            primaryResetAt: now.addingTimeInterval(8 * 3_600),
+            primaryLimitWindowSeconds: 18_000,
+            lastChecked: now.addingTimeInterval(-(90 * 60))
+        )
+
+        XCTAssertEqual(account.headerQuotaRemark(now: now), "3时30分")
+    }
+
+    func testHeaderQuotaRemarkClampsWeeklyResetToSevenDaysFromLastChecked() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let account = makeAccount(
+            primaryUsedPercent: 30,
+            secondaryUsedPercent: 100,
+            secondaryResetAt: now.addingTimeInterval(10 * 86_400),
+            secondaryLimitWindowSeconds: 604_800,
+            lastChecked: now.addingTimeInterval(-(12 * 3_600))
+        )
+
+        XCTAssertEqual(account.headerQuotaRemark(now: now), "6天12时")
+    }
+
+    func testOAuthSnapshotRoundTripSanitizesPrimaryResetBeforePersistence() throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let account = makeAccount(
+            primaryUsedPercent: 90,
+            secondaryUsedPercent: 0,
+            primaryResetAt: now.addingTimeInterval(8 * 3_600),
+            primaryLimitWindowSeconds: 18_000,
+            lastChecked: now.addingTimeInterval(-(90 * 60))
+        )
+
+        let stored = CodexBarProviderAccount.fromTokenAccount(account, existingID: account.accountId)
+        let restored = try XCTUnwrap(stored.asTokenAccount(isActive: false))
+
+        XCTAssertEqual(stored.primaryResetAt, now.addingTimeInterval(3.5 * 3_600))
+        XCTAssertEqual(restored.primaryResetAt, now.addingTimeInterval(3.5 * 3_600))
     }
 
     func testGroupHeaderRemarkUsesRepresentativeAccountAfterSorting() {
@@ -113,7 +171,7 @@ final class TokenAccountHeaderQuotaRemarkTests: XCTestCase {
 
         let group = OpenAIAccountListLayout.groupedAccounts(from: [primaryExhausted, weeklyExhausted]).first
 
-        XCTAssertEqual(group?.representativeAccount?.accountId, "acct_weekly")
+        XCTAssertEqual(group?.representativeAccount?.accountId, "acct_primary")
         XCTAssertEqual(group?.headerQuotaRemark(now: now), "1时15分")
     }
 
@@ -279,7 +337,8 @@ final class TokenAccountHeaderQuotaRemarkTests: XCTestCase {
         primaryResetAt: Date? = nil,
         secondaryResetAt: Date? = nil,
         primaryLimitWindowSeconds: Int? = nil,
-        secondaryLimitWindowSeconds: Int? = nil
+        secondaryLimitWindowSeconds: Int? = nil,
+        lastChecked: Date? = nil
     ) -> TokenAccount {
         TokenAccount(
             email: email,
@@ -290,7 +349,8 @@ final class TokenAccountHeaderQuotaRemarkTests: XCTestCase {
             primaryResetAt: primaryResetAt,
             secondaryResetAt: secondaryResetAt,
             primaryLimitWindowSeconds: primaryLimitWindowSeconds,
-            secondaryLimitWindowSeconds: secondaryLimitWindowSeconds
+            secondaryLimitWindowSeconds: secondaryLimitWindowSeconds,
+            lastChecked: lastChecked
         )
     }
 }

@@ -25,7 +25,7 @@ extension OpenAIAccountGroup {
 
     nonisolated func headerQuotaRemark(now: Date = Date()) -> String? {
         let nearestResetAt = TokenAccount.nearestResetDate(
-            in: self.accounts.compactMap { $0.nearestResetAt(now: now) },
+            in: self.accounts.compactMap { $0.availabilityResetAt(now: now) },
             now: now
         )
 
@@ -167,14 +167,19 @@ enum OpenAIAccountListLayout {
             return lhs.sortBucket.rawValue < rhs.sortBucket.rawValue
         }
 
-        let lhsWeightedPrimary = lhs.weightedPrimaryRemainingPercent(using: quotaSortSettings)
-        let rhsWeightedPrimary = rhs.weightedPrimaryRemainingPercent(using: quotaSortSettings)
+        if lhs.sortBucket == .exhausted,
+           let earlierResetPrecedes = self.earlierResetPrecedes(lhs, rhs, now: now) {
+            return earlierResetPrecedes
+        }
+
+        let lhsWeightedPrimary = lhs.weightedPrimaryRemainingPercent(now: now, using: quotaSortSettings)
+        let rhsWeightedPrimary = rhs.weightedPrimaryRemainingPercent(now: now, using: quotaSortSettings)
         if lhsWeightedPrimary != rhsWeightedPrimary {
             return lhsWeightedPrimary > rhsWeightedPrimary
         }
 
-        let lhsWeightedSecondary = lhs.weightedSecondaryRemainingPercent(using: quotaSortSettings)
-        let rhsWeightedSecondary = rhs.weightedSecondaryRemainingPercent(using: quotaSortSettings)
+        let lhsWeightedSecondary = lhs.weightedSecondaryRemainingPercent(now: now, using: quotaSortSettings)
+        let rhsWeightedSecondary = rhs.weightedSecondaryRemainingPercent(now: now, using: quotaSortSettings)
         if lhsWeightedSecondary != rhsWeightedSecondary {
             return lhsWeightedSecondary > rhsWeightedSecondary
         }
@@ -189,12 +194,16 @@ enum OpenAIAccountListLayout {
             return lhsPlanMultiplier > rhsPlanMultiplier
         }
 
-        if lhs.primaryRemainingPercent != rhs.primaryRemainingPercent {
-            return lhs.primaryRemainingPercent > rhs.primaryRemainingPercent
+        let lhsPrimaryRemaining = lhs.primaryRemainingPercent(now: now)
+        let rhsPrimaryRemaining = rhs.primaryRemainingPercent(now: now)
+        if lhsPrimaryRemaining != rhsPrimaryRemaining {
+            return lhsPrimaryRemaining > rhsPrimaryRemaining
         }
 
-        if lhs.secondaryRemainingPercent != rhs.secondaryRemainingPercent {
-            return lhs.secondaryRemainingPercent > rhs.secondaryRemainingPercent
+        let lhsSecondaryRemaining = lhs.secondaryRemainingPercent(now: now)
+        let rhsSecondaryRemaining = rhs.secondaryRemainingPercent(now: now)
+        if lhsSecondaryRemaining != rhsSecondaryRemaining {
+            return lhsSecondaryRemaining > rhsSecondaryRemaining
         }
 
         let lhsEmail = lhs.email.localizedLowercase
@@ -211,8 +220,8 @@ enum OpenAIAccountListLayout {
         _ rhs: TokenAccount,
         now: Date
     ) -> Bool? {
-        guard let lhsResetAt = lhs.nearestResetAt(now: now),
-              let rhsResetAt = rhs.nearestResetAt(now: now),
+        guard let lhsResetAt = lhs.availabilityResetAt(now: now),
+              let rhsResetAt = rhs.availabilityResetAt(now: now),
               lhsResetAt != rhsResetAt else {
             return nil
         }

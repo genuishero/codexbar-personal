@@ -167,6 +167,54 @@ final class OpenAIAccountListLayoutTests: XCTestCase {
         XCTAssertEqual(grouped.map(\.email), ["free@example.com", "plus@example.com"])
     }
 
+    func testExhaustedPlusRecoveringSoonBeatsFreeAccountsWithoutSecondaryWindow() {
+        let free = makeAccount(
+            email: "free@example.com",
+            accountId: "acct_free",
+            planType: "free",
+            primaryUsedPercent: 100,
+            secondaryUsedPercent: 0,
+            primaryResetAt: Date(timeIntervalSinceNow: 5 * 24 * 60 * 60)
+        )
+        let plus = makeAccount(
+            email: "plus@example.com",
+            accountId: "acct_plus",
+            planType: "plus",
+            primaryUsedPercent: 100,
+            secondaryUsedPercent: 99,
+            primaryResetAt: Date(timeIntervalSinceNow: 50 * 60),
+            secondaryResetAt: Date(timeIntervalSinceNow: 7 * 24 * 60 * 60)
+        )
+
+        let grouped = OpenAIAccountListLayout.groupedAccounts(from: [free, plus])
+
+        XCTAssertEqual(grouped.map(\.email), ["plus@example.com", "free@example.com"])
+    }
+
+    func testWeeklyExhaustedAccountSortsByWeeklyResetNotSoonerPrimaryReset() {
+        let free = makeAccount(
+            email: "free@example.com",
+            accountId: "acct_free",
+            planType: "free",
+            primaryUsedPercent: 100,
+            secondaryUsedPercent: 0,
+            primaryResetAt: Date(timeIntervalSinceNow: 5 * 24 * 60 * 60)
+        )
+        let plus = makeAccount(
+            email: "plus@example.com",
+            accountId: "acct_plus",
+            planType: "plus",
+            primaryUsedPercent: 7,
+            secondaryUsedPercent: 100,
+            primaryResetAt: Date(timeIntervalSinceNow: 50 * 60),
+            secondaryResetAt: Date(timeIntervalSinceNow: 7 * 24 * 60 * 60)
+        )
+
+        let grouped = OpenAIAccountListLayout.groupedAccounts(from: [free, plus])
+
+        XCTAssertEqual(grouped.map(\.email), ["free@example.com", "plus@example.com"])
+    }
+
     func testMixedPlanWeightedQuotaGivesTeamOnePointFivePlusValue() {
         let plus = makeAccount(
             email: "plus@example.com",

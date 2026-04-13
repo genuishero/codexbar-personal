@@ -299,6 +299,30 @@ struct CodexBarProviderAccount: Codable, Identifiable, Equatable {
     }
 
     func asTokenAccount(isActive: Bool) -> TokenAccount? {
+        self.rawTokenAccount(isActive: isActive)?.normalizedQuotaSnapshot()
+    }
+
+    func sanitizedQuotaSnapshot(now: Date = Date()) -> CodexBarProviderAccount {
+        guard let normalized = self.rawTokenAccount(isActive: false)?.normalizedQuotaSnapshot(now: now) else {
+            return self
+        }
+
+        var sanitized = self
+        sanitized.planType = normalized.planType
+        sanitized.primaryUsedPercent = normalized.primaryUsedPercent
+        sanitized.secondaryUsedPercent = normalized.secondaryUsedPercent
+        sanitized.primaryResetAt = normalized.primaryResetAt
+        sanitized.secondaryResetAt = normalized.secondaryResetAt
+        sanitized.primaryLimitWindowSeconds = normalized.primaryLimitWindowSeconds
+        sanitized.secondaryLimitWindowSeconds = normalized.secondaryLimitWindowSeconds
+        sanitized.lastChecked = normalized.lastChecked
+        sanitized.isSuspended = normalized.isSuspended
+        sanitized.tokenExpired = normalized.tokenExpired
+        sanitized.organizationName = normalized.organizationName
+        return sanitized
+    }
+
+    private func rawTokenAccount(isActive: Bool) -> TokenAccount? {
         guard self.kind == .oauthTokens,
               let accessToken = self.accessToken,
               let refreshToken = self.refreshToken,
@@ -331,28 +355,29 @@ struct CodexBarProviderAccount: Codable, Identifiable, Equatable {
     }
 
     static func fromTokenAccount(_ account: TokenAccount, existingID: String? = nil) -> CodexBarProviderAccount {
-        CodexBarProviderAccount(
-            id: existingID ?? account.accountId,
+        let normalizedAccount = account.normalizedQuotaSnapshot()
+        return CodexBarProviderAccount(
+            id: existingID ?? normalizedAccount.accountId,
             kind: .oauthTokens,
-            label: account.email.isEmpty ? account.accountId : account.email,
-            email: account.email,
-            openAIAccountId: account.remoteAccountId,
-            accessToken: account.accessToken,
-            refreshToken: account.refreshToken,
-            idToken: account.idToken,
+            label: normalizedAccount.email.isEmpty ? normalizedAccount.accountId : normalizedAccount.email,
+            email: normalizedAccount.email,
+            openAIAccountId: normalizedAccount.remoteAccountId,
+            accessToken: normalizedAccount.accessToken,
+            refreshToken: normalizedAccount.refreshToken,
+            idToken: normalizedAccount.idToken,
             lastRefresh: Date(),
             addedAt: Date(),
-            planType: account.planType,
-            primaryUsedPercent: account.primaryUsedPercent,
-            secondaryUsedPercent: account.secondaryUsedPercent,
-            primaryResetAt: account.primaryResetAt,
-            secondaryResetAt: account.secondaryResetAt,
-            primaryLimitWindowSeconds: account.primaryLimitWindowSeconds,
-            secondaryLimitWindowSeconds: account.secondaryLimitWindowSeconds,
-            lastChecked: account.lastChecked,
-            isSuspended: account.isSuspended,
-            tokenExpired: account.tokenExpired,
-            organizationName: account.organizationName
+            planType: normalizedAccount.planType,
+            primaryUsedPercent: normalizedAccount.primaryUsedPercent,
+            secondaryUsedPercent: normalizedAccount.secondaryUsedPercent,
+            primaryResetAt: normalizedAccount.primaryResetAt,
+            secondaryResetAt: normalizedAccount.secondaryResetAt,
+            primaryLimitWindowSeconds: normalizedAccount.primaryLimitWindowSeconds,
+            secondaryLimitWindowSeconds: normalizedAccount.secondaryLimitWindowSeconds,
+            lastChecked: normalizedAccount.lastChecked,
+            isSuspended: normalizedAccount.isSuspended,
+            tokenExpired: normalizedAccount.tokenExpired,
+            organizationName: normalizedAccount.organizationName
         )
     }
 }

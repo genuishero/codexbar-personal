@@ -47,13 +47,14 @@ final class CodexBarConfigStore {
         }
 
         let normalized = self.normalizeOAuthAccountIdentities(in: loaded)
-        if FileManager.default.fileExists(atPath: CodexPaths.barConfigURL.path) == false || normalized.changed {
-            try self.save(normalized.config)
+        let sanitized = self.sanitizeOAuthQuotaSnapshots(in: normalized.config)
+        if FileManager.default.fileExists(atPath: CodexPaths.barConfigURL.path) == false || normalized.changed || sanitized.changed {
+            try self.save(sanitized.config)
             if normalized.migratedAccountIDs.isEmpty == false {
                 try? self.switchJournalStore.remapOpenAIOAuthAccountIDs(using: normalized.migratedAccountIDs)
             }
         }
-        return normalized.config
+        return sanitized.config
     }
 
     func load() throws -> CodexBarConfig {
@@ -336,6 +337,28 @@ final class CodexBarConfigStore {
         merged.tokenExpired = incoming.tokenExpired ?? existing.tokenExpired
         merged.organizationName = incoming.organizationName ?? existing.organizationName
         return merged
+    }
+
+    private func sanitizeOAuthQuotaSnapshots(
+        in config: CodexBarConfig
+    ) -> (config: CodexBarConfig, changed: Bool) {
+        var sanitizedConfig = config
+        var changed = false
+
+        for providerIndex in sanitizedConfig.providers.indices {
+            guard sanitizedConfig.providers[providerIndex].kind == .openAIOAuth else { continue }
+            var provider = sanitizedConfig.providers[providerIndex]
+            provider.accounts = provider.accounts.map { account in
+                let sanitized = account.sanitizedQuotaSnapshot()
+                if sanitized != account {
+                    changed = true
+                }
+                return sanitized
+            }
+            sanitizedConfig.providers[providerIndex] = provider
+        }
+
+        return (sanitizedConfig, changed)
     }
 
     private func uniqueOAuthAccount(

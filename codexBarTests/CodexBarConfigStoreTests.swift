@@ -61,4 +61,46 @@ final class CodexBarConfigStoreTests: CodexBarTestCase {
         XCTAssertEqual(history.first?.accountID, localAccountID)
         XCTAssertEqual(history.first?.previousAccountID, localAccountID)
     }
+
+    func testLoadOrMigrateSanitizesHistoricalOverWindowResetAt() throws {
+        let store = CodexBarConfigStore()
+        let lastChecked = Date(timeIntervalSince1970: 1_700_000_000)
+        let stored = CodexBarProviderAccount(
+            id: "acct_over_window",
+            kind: .oauthTokens,
+            label: "over-window@example.com",
+            email: "over-window@example.com",
+            openAIAccountId: "acct_over_window",
+            accessToken: "token",
+            refreshToken: "refresh",
+            idToken: "id",
+            addedAt: Date(timeIntervalSince1970: 42),
+            planType: "plus",
+            primaryUsedPercent: 80,
+            secondaryUsedPercent: 0,
+            primaryResetAt: lastChecked.addingTimeInterval(8 * 3_600),
+            primaryLimitWindowSeconds: 18_000,
+            lastChecked: lastChecked
+        )
+        let provider = CodexBarProvider(
+            id: "openai-oauth",
+            kind: .openAIOAuth,
+            label: "OpenAI",
+            enabled: true,
+            activeAccountId: stored.id,
+            accounts: [stored]
+        )
+        try store.save(
+            CodexBarConfig(
+                active: CodexBarActiveSelection(providerId: provider.id, accountId: stored.id),
+                providers: [provider]
+            )
+        )
+
+        let loaded = try store.loadOrMigrate()
+        let account = try XCTUnwrap(loaded.oauthProvider()?.accounts.first)
+
+        XCTAssertEqual(account.primaryResetAt, lastChecked.addingTimeInterval(5 * 3_600))
+        XCTAssertEqual(account.primaryLimitWindowSeconds, 18_000)
+    }
 }

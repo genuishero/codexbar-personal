@@ -132,17 +132,33 @@ struct TokenAccount: Codable, Identifiable {
 
     /// 5h 窗口重置倒计时文字
     var primaryResetDescription: String {
-        resetLabel(from: primaryResetAt)
+        let now = Date()
+        return self.resetLabel(
+            from: self.effectiveResetAt(
+                self.primaryResetAt,
+                limitWindowSeconds: self.resolvedPrimaryLimitWindowSeconds(now: now),
+                now: now
+            ),
+            now: now
+        )
     }
 
     /// 周窗口重置倒计时文字
     var secondaryResetDescription: String {
-        resetLabel(from: secondaryResetAt)
+        let now = Date()
+        return self.resetLabel(
+            from: self.effectiveResetAt(
+                self.secondaryResetAt,
+                limitWindowSeconds: self.resolvedSecondaryLimitWindowSeconds(now: now),
+                now: now
+            ),
+            now: now
+        )
     }
 
-    private func resetLabel(from date: Date?) -> String {
+    private func resetLabel(from date: Date?, now: Date) -> String {
         guard let date = date else { return "" }
-        let remaining = date.timeIntervalSinceNow
+        let remaining = date.timeIntervalSince(now)
         guard remaining > 0 else { return L.resetSoon }
         let seconds = Int(remaining)
         let days = seconds / 86400
@@ -151,6 +167,33 @@ struct TokenAccount: Codable, Identifiable {
         if days > 0 { return L.resetInDay(days, hours) }
         if hours > 0 { return L.resetInHr(hours, minutes) }
         return L.resetInMin(minutes)
+    }
+
+    nonisolated func normalizedQuotaSnapshot(now: Date = Date()) -> TokenAccount {
+        var normalized = self
+        let primaryWindowSeconds = self.resolvedPrimaryLimitWindowSeconds(now: now)
+        let secondaryWindowSeconds = self.resolvedSecondaryLimitWindowSeconds(now: now)
+
+        if normalized.primaryLimitWindowSeconds == nil {
+            normalized.primaryLimitWindowSeconds = primaryWindowSeconds
+        }
+        if normalized.secondaryLimitWindowSeconds == nil {
+            normalized.secondaryLimitWindowSeconds = secondaryWindowSeconds
+        }
+
+        normalized.primaryResetAt = Self.clampedResetAt(
+            self.primaryResetAt,
+            limitWindowSeconds: primaryWindowSeconds,
+            lastChecked: self.lastChecked,
+            now: now
+        )
+        normalized.secondaryResetAt = Self.clampedResetAt(
+            self.secondaryResetAt,
+            limitWindowSeconds: secondaryWindowSeconds,
+            lastChecked: self.lastChecked,
+            now: now
+        )
+        return normalized
     }
 
     nonisolated func usageSnapshotAge(now: Date = Date()) -> TimeInterval? {
@@ -218,31 +261,55 @@ extension TokenAccount {
     }
 
     nonisolated var primaryRemainingPercent: Double {
-        max(0, 100 - primaryUsedPercent)
+        self.primaryRemainingPercent(now: Date())
     }
 
     nonisolated var secondaryRemainingPercent: Double {
-        max(0, 100 - secondaryUsedPercent)
+        self.secondaryRemainingPercent(now: Date())
+    }
+
+    nonisolated func primaryRemainingPercent(now: Date) -> Double {
+        guard self.resolvedPrimaryLimitWindowSeconds(now: now) != nil else { return 0 }
+        return max(0, 100 - primaryUsedPercent)
+    }
+
+    nonisolated func secondaryRemainingPercent(now: Date) -> Double {
+        guard self.resolvedSecondaryLimitWindowSeconds(now: now) != nil else { return 0 }
+        return max(0, 100 - secondaryUsedPercent)
     }
 
     nonisolated func weightedPrimaryRemainingPercent(
         using quotaSortSettings: CodexBarOpenAISettings.QuotaSortSettings
     ) -> Double {
-        self.primaryRemainingPercent * self.planQuotaMultiplier(using: quotaSortSettings)
+        self.weightedPrimaryRemainingPercent(now: Date(), using: quotaSortSettings)
     }
 
     nonisolated var weightedPrimaryRemainingPercent: Double {
         self.weightedPrimaryRemainingPercent(using: CodexBarOpenAISettings.QuotaSortSettings())
     }
 
+    nonisolated func weightedPrimaryRemainingPercent(
+        now: Date,
+        using quotaSortSettings: CodexBarOpenAISettings.QuotaSortSettings
+    ) -> Double {
+        self.primaryRemainingPercent(now: now) * self.planQuotaMultiplier(using: quotaSortSettings)
+    }
+
     nonisolated func weightedSecondaryRemainingPercent(
         using quotaSortSettings: CodexBarOpenAISettings.QuotaSortSettings
     ) -> Double {
-        self.secondaryRemainingPercent * self.planQuotaMultiplier(using: quotaSortSettings)
+        self.weightedSecondaryRemainingPercent(now: Date(), using: quotaSortSettings)
     }
 
     nonisolated var weightedSecondaryRemainingPercent: Double {
         self.weightedSecondaryRemainingPercent(using: CodexBarOpenAISettings.QuotaSortSettings())
+    }
+
+    nonisolated func weightedSecondaryRemainingPercent(
+        now: Date,
+        using quotaSortSettings: CodexBarOpenAISettings.QuotaSortSettings
+    ) -> Double {
+        self.secondaryRemainingPercent(now: now) * self.planQuotaMultiplier(using: quotaSortSettings)
     }
 
     nonisolated var sortBucket: OpenAIAccountSortBucket {
@@ -258,8 +325,20 @@ extension TokenAccount {
         )
     }
 
+    nonisolated func availabilityResetAt(now: Date = Date()) -> Date? {
+        let exhaustedResets = self.rateLimitWindows(now: now)
+            .filter { $0.usedPercent >= 100 }
+            .compactMap(\.resetAt)
+
+        if exhaustedResets.isEmpty == false {
+            return exhaustedResets.max()
+        }
+
+        return self.nearestResetAt(now: now)
+    }
+
     nonisolated func headerQuotaRemark(now: Date = Date()) -> String? {
-        guard let resetAt = self.nearestResetAt(now: now) else { return nil }
+        guard let resetAt = self.availabilityResetAt(now: now) else { return nil }
         return Self.compactResetRemaining(until: resetAt, now: now)
     }
 
@@ -282,6 +361,20 @@ extension TokenAccount {
         }
 
         return L.compactResetSoon
+    }
+
+    nonisolated static func clampedResetAt(
+        _ rawResetAt: Date?,
+        limitWindowSeconds: Int?,
+        lastChecked: Date?,
+        now: Date
+    ) -> Date? {
+        guard let rawResetAt else { return nil }
+        guard let limitWindowSeconds, limitWindowSeconds > 0 else { return rawResetAt }
+
+        let anchor = lastChecked ?? now
+        let maxResetAt = anchor.addingTimeInterval(TimeInterval(limitWindowSeconds))
+        return min(rawResetAt, maxResetAt)
     }
 
     nonisolated static func nearestResetDate(in dates: [Date], now: Date) -> Date? {
@@ -327,11 +420,16 @@ extension TokenAccount {
     }
 
     nonisolated private func rateLimitWindows(now: Date) -> [RateLimitWindowSnapshot] {
+        let primaryWindowSeconds = self.resolvedPrimaryLimitWindowSeconds(now: now)
         var windows: [RateLimitWindowSnapshot] = [
             RateLimitWindowSnapshot(
                 usedPercent: self.primaryUsedPercent,
-                resetAt: self.primaryResetAt,
-                limitWindowSeconds: self.resolvedPrimaryLimitWindowSeconds(now: now)
+                resetAt: self.effectiveResetAt(
+                    self.primaryResetAt,
+                    limitWindowSeconds: primaryWindowSeconds,
+                    now: now
+                ),
+                limitWindowSeconds: primaryWindowSeconds
             )
         ]
 
@@ -339,13 +437,30 @@ extension TokenAccount {
             windows.append(
                 RateLimitWindowSnapshot(
                     usedPercent: self.secondaryUsedPercent,
-                    resetAt: self.secondaryResetAt,
+                    resetAt: self.effectiveResetAt(
+                        self.secondaryResetAt,
+                        limitWindowSeconds: secondaryWindowSeconds,
+                        now: now
+                    ),
                     limitWindowSeconds: secondaryWindowSeconds
                 )
             )
         }
 
         return windows
+    }
+
+    nonisolated private func effectiveResetAt(
+        _ rawResetAt: Date?,
+        limitWindowSeconds: Int?,
+        now: Date
+    ) -> Date? {
+        Self.clampedResetAt(
+            rawResetAt,
+            limitWindowSeconds: limitWindowSeconds,
+            lastChecked: self.lastChecked,
+            now: now
+        )
     }
 
     nonisolated private func resolvedPrimaryLimitWindowSeconds(now: Date) -> Int? {

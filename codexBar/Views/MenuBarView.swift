@@ -357,6 +357,7 @@ struct MenuBarView: View {
             countdownTimerConnection = countdownTimer.connect()
             runningThreadTimerConnection?.cancel()
             runningThreadTimerConnection = runningThreadTimer.connect()
+            store.load()
             store.markActiveAccount()
             isProvidersExpanded = false
             refreshRunningThreadAttribution()
@@ -1139,7 +1140,7 @@ struct MenuBarView: View {
         guard didTriggerOpenRefresh == false else { return }
         didTriggerOpenRefresh = true
         guard isRefreshing == false else { return }
-        Task { await refresh(force: false, announceResult: false) }
+        Task { await refresh(force: true, announceResult: false) }
     }
 
     private func refresh(force: Bool = true, announceResult: Bool = false) async {
