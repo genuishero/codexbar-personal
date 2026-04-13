@@ -510,10 +510,6 @@ extension TokenAccount {
         }
         return "\(max(1, seconds / 60))m"
     }
-    
-    // MARK: - Security Warning State (for UI only, not persisted)
-    @UserStorage("quotaWarning_shown_")
-    var hasShownQuotaWarning: Bool = false
 }
 
 private struct RateLimitWindowSnapshot {

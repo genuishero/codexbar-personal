@@ -147,13 +147,13 @@ final class AppLifecycleObserver: NSObject, NSApplicationDelegate {
                 OpenAIUsagePollingService.shared.start()
                 UpdateCoordinator.shared.start()
                 ClipboardManager.shared // force static init
-                SecurityFeatureManager.shared // force static init
-                KeyboardShortcutsManager.shared.startListening()
-                QuotaWarningService.shared.startMonitoring()
-                
-                if !QuickStartManager.shared.hasCompleted {
-                    NSWorkspace.shared.open(URL(string: "codexbar://quickstart")!)
-                }
+                // SecurityFeatureManager.shared // force static init
+                // KeyboardShortcutsManager.shared.startListening()
+                // QuotaWarningService.shared.startMonitoring()
+
+                // if !QuickStartManager.shared.hasCompleted {
+                //     NSWorkspace.shared.open(URL(string: "codexbar://quickstart")!)
+                // }
             } else {
                 self.startDistributedObserversForPrimary()
                 MenuHostBootstrapService.shared.ensureMenuHostRunning()
@@ -213,6 +213,6 @@ final class AppLifecycleObserver: NSObject, NSApplicationDelegate {
         let center = DistributedNotificationCenter.default()
         self.distributedObservers.forEach { center.removeObserver($0) }
         self.distributedObservers.removeAll()
-        KeyboardShortcutsManager.shared.stopListening()
+        // KeyboardShortcutsManager.shared.stopListening()
     }
 }

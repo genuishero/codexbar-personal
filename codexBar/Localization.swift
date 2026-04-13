@@ -38,6 +38,13 @@ enum L {
     static var openAI: String          { zh ? "OpenAI 账号"         : "OpenAI Accounts" }
     static var addOpenAI: String       { zh ? "添加 OpenAI 账号"    : "Add OpenAI Account" }
     static var newAccount: String      { zh ? "新账号"              : "New Account" }
+    static var noAccounts: String      { zh ? "暂无账号"            : "No Accounts" }
+    static func menuUpdateAvailableTitle(_ version: String) -> String {
+        zh ? "更新可用: \(version)" : "Update Available: \(version)"
+    }
+    static func menuUpdateAvailableSubtitle(_ current: String, _ latest: String) -> String {
+        zh ? "当前 \(current) → 最新 \(latest)" : "Current \(current) → Latest \(latest)"
+    }
     static func updateInstallActionHelp(_ version: String) -> String {
         zh ? "下载或安装 \(version)" : "Download or Install \(version)"
     }
@@ -103,7 +110,7 @@ enum L {
     static var updateErrorAutomaticUpdateUnavailable: String {
         zh ? "当前构建尚未接入可执行的自动更新引擎。" : "An executable automatic update engine is not available in this build."
     }
-    static var settingsWindowTitle: String { self.settings }
+    static var settingsWindowTitle: String { zh ? "设置" : "Settings" }
     static var settingsWindowHint: String {
         zh
             ? "左侧切换账户、用量和更新设置。窗口内的修改会先保存在草稿里,点击保存后再统一生效。"
@@ -184,7 +191,7 @@ enum L {
     static var accountOrderingModeTitle: String { zh ? "账号排序方式" : "Account Ordering" }
     static var accountOrderingModeHint: String {
         zh
-            ? "可在"按用量排序"和"按手动顺序"之间切换。只有切到手动顺序时,下面的手动排序才会影响主菜单展示。"
+            ? "可在「按用量排序」和「按手动顺序」之间切换。只有切到手动顺序时,下面的手动排序才会影响主菜单展示。"
             : "Switch between quota-based sorting and manual order. The manual list below only affects the main menu when manual order is selected."
     }
     static var accountOrderingModeQuotaSort: String { zh ? "按用量排序" : "Sort by Quota" }
@@ -197,11 +204,11 @@ enum L {
     }
     static var accountOrderHint: String {
         zh
-            ? "这里定义手动顺序。只有在上方选了"按手动顺序"后它才生效;active / running 账号仍会临时浮顶。"
+            ? "这里定义手动顺序。只有在上方选了「按手动顺序」后它才生效;active / running 账号仍会临时浮顶。"
             : "This defines the manual order. It only takes effect when \"Manual Order\" is selected above, and active/running accounts still float to the top."
     }
     static var accountOrderInactiveHint: String {
-        zh ? "当前按用量排序;你仍可预先调整手动顺序,等切到"按手动顺序"后再生效。" : "Quota sorting is currently active. You can still prepare the manual order below, and it will apply once you switch to Manual Order."
+        zh ? "当前按用量排序;你仍可预先调整手动顺序,等切到「按手动顺序」后再生效。" : "Quota sorting is currently active. You can still prepare the manual order below, and it will apply once you switch to Manual Order."
     }
     static var noOpenAIAccountsForOrdering: String { zh ? "当前没有可排序的 OpenAI 账号。" : "There are no OpenAI accounts to reorder." }
     static var moveUp: String { zh ? "上移" : "Move Up" }
@@ -246,6 +253,10 @@ enum L {
     }
     static var openAICSVExportPrompt: String { zh ? "导出" : "Export" }
     static var openAICSVImportPrompt: String { zh ? "导入" : "Import" }
+    static var openAICSVToolbar: String { zh ? "CSV 导入/导出" : "CSV Import/Export" }
+    static var exportOpenAICSVAction: String { zh ? "导出 CSV" : "Export CSV" }
+    static var importOpenAICSVAction: String { zh ? "导入 CSV" : "Import CSV" }
+    static var menuUpdateAction: String { zh ? "更新" : "Update" }
     static var noOpenAIAccountsToExport: String {
         zh ? "没有可导出的 OpenAI 账号" : "No OpenAI accounts available to export"
     }
@@ -300,7 +311,13 @@ enum L {
     static var quit: String            { zh ? "退出"               : "Quit" }
     static var cancel: String          { zh ? "取消"               : "Cancel" }
     static var justUpdated: String     { zh ? "刚刚更新"            : "Just updated" }
-    static var bulletSeparator: String { zh ? "·" : "•" }
+    static var settings: String        { zh ? "设置"               : "Settings" }
+
+    // MARK: - Codex Launch Probe
+    static var codexLaunchProbeAppNotFound: String { zh ? "未找到 Codex.app" : "Codex.app not found" }
+    static var codexLaunchProbeExecutableMissing: String { zh ? "Codex 可执行文件缺失" : "Codex executable missing" }
+    static var codexLaunchProbeTimedOut: String { zh ? "启动超时" : "Launch timed out" }
+    static func codexLaunchProbeFailed(_ message: String) -> String { zh ? "启动失败: \(message)" : "Launch failed: \(message)" }
 
     static func available(_ n: Int, _ total: Int) -> String {
         zh ? "\(n)/\(total) 可用" : "\(n)/\(total) Available"
@@ -421,7 +438,6 @@ enum L {
     static func resetInDay(_ d: Int, _ h: Int) -> String {
         zh ? "\(d) 天 \(h) 小时后重置" : "Resets in \(d)d \(h)h"
     }
-}
 
     // MARK: - Security
     static var clipboardCleared: String { zh ? "剪贴板已清除" : "Clipboard cleared" }
