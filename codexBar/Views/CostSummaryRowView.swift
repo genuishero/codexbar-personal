@@ -8,7 +8,7 @@ struct CostSummaryRowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Cost")
+                Text(L.costLabel)
                     .font(.system(size: 12, weight: .semibold))
                 Spacer()
                 Image(systemName: "chevron.right")
@@ -16,12 +16,12 @@ struct CostSummaryRowView: View {
                     .foregroundColor(.secondary)
             }
 
-            Text("Today: \(currency(summary.todayCostUSD)) · \(compactTokens(summary.todayTokens)) tokens")
+            Text("\(L.todayCost): \(currency(summary.todayCostUSD)) · \(compactTokens(summary.todayTokens)) \(L.tokensCount)")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
                 .lineLimit(1)
 
-            Text("Last 30 days: \(currency(summary.last30DaysCostUSD)) · \(compactTokens(summary.last30DaysTokens)) tokens")
+            Text("\(L.last30DaysCost): \(currency(summary.last30DaysCostUSD)) · \(compactTokens(summary.last30DaysTokens)) \(L.tokensCount)")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
                 .lineLimit(1)
@@ -129,7 +129,7 @@ struct CostDetailsPanelView: View {
             Divider()
 
             if points.isEmpty {
-                Text("No cost history data.")
+                Text(L.noCostHistoryData)
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             } else {
@@ -201,13 +201,13 @@ struct CostDetailsPanelView: View {
         if let point = selectedPoint {
             return "\(shortDay(point.date)) · \(currency(point.costUSD))"
         }
-        return "Last 30 days trend"
+        return L.last30DaysTrend
     }
 
     private func secondaryDetailText() -> String {
         if let point = selectedPoint {
-            return "\(compactTokens(point.totalTokens)) tokens"
+            return "\(compactTokens(point.totalTokens)) \(L.tokensCount)"
         }
-        return "Hover bars for daily details"
+        return L.hoverBarsForDetails
     }
 }

@@ -389,7 +389,7 @@ struct MenuBarView: View {
     private var menuContentStack: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("codexbar")
+                Text(L.codexbar)
                     .font(.system(size: 13, weight: .semibold))
 
                 if let active = store.activeProvider {
@@ -466,7 +466,7 @@ struct MenuBarView: View {
                         .foregroundColor(.secondary)
                     Text(L.noAccounts)
                         .foregroundColor(.secondary)
-                    Text("Add an OpenAI account or create a custom provider.")
+                    Text(L.noAccountsToAdd)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -637,7 +637,7 @@ struct MenuBarView: View {
     private var openAIAccountsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Text("OpenAI Accounts")
+                Text(L.openAIAccountsLabel)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
@@ -674,9 +674,9 @@ struct MenuBarView: View {
 
             if store.accounts.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("No OpenAI account added.")
+                    Text(L.noOpenAIAccountAdded)
                         .font(.system(size: 11, weight: .medium))
-                    Text("Use the toolbar plus button to add OpenAI OAuth accounts.")
+                    Text(L.useToolbarToAdd)
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
@@ -709,7 +709,7 @@ struct MenuBarView: View {
                     isProvidersExpanded.toggle()
                 } label: {
                     HStack(spacing: 6) {
-                        Text("Providers")
+                        Text(L.providersLabel)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
 
@@ -1099,7 +1099,7 @@ struct MenuBarView: View {
     private func openAddProviderWindow() {
         DetachedWindowPresenter.shared.show(
             id: "add-provider",
-            title: "Add Provider",
+            title: L.addProviderBtn,
             size: CGSize(width: 420, height: 320)
         ) {
             AddProviderSheet { label, baseURL, accountLabel, apiKey in
@@ -1119,7 +1119,7 @@ struct MenuBarView: View {
     private func openAddProviderAccountWindow(provider: CodexBarProvider) {
         DetachedWindowPresenter.shared.show(
             id: "add-provider-account-\(provider.id)",
-            title: "Add Account",
+            title: L.addAccountBtn,
             size: CGSize(width: 400, height: 220)
         ) {
             AddProviderAccountSheet(provider: provider) { label, apiKey in
@@ -1293,7 +1293,7 @@ private struct AddProviderSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Add Provider")
+            Text(L.addProviderBtn)
                 .font(.headline)
 
             TextField("Provider name", text: $label)
@@ -1303,8 +1303,8 @@ private struct AddProviderSheet: View {
 
             HStack {
                 Spacer()
-                Button("Cancel", action: onCancel)
-                Button("Save") {
+                Button(L.cancel, action: onCancel)
+                Button(L.save) {
                     onSave(label, baseURL, accountLabel, apiKey)
                 }
                 .buttonStyle(.borderedProminent)
@@ -1325,7 +1325,7 @@ private struct AddProviderAccountSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Add Account · \(provider.label)")
+            Text("\(L.addAccountBtn) · \(provider.label)")
                 .font(.headline)
 
             TextField("Account label", text: $label)
@@ -1333,8 +1333,8 @@ private struct AddProviderAccountSheet: View {
 
             HStack {
                 Spacer()
-                Button("Cancel", action: onCancel)
-                Button("Save") {
+                Button(L.cancel, action: onCancel)
+                Button(L.save) {
                     onSave(label, apiKey)
                 }
                 .buttonStyle(.borderedProminent)

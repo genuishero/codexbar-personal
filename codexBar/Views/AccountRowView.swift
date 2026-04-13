@@ -132,7 +132,7 @@ struct AccountRowView: View {
         HStack(spacing: 6) {
             ForEach(Array(account.usageWindowDisplays(mode: self.usageDisplayMode).enumerated()), id: \.offset) { index, window in
                 if index > 0 {
-                    Text("•")
+                    Text(L.bulletSeparator)
                         .font(.system(size: 9))
                         .foregroundColor(.secondary)
                 }
