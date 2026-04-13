@@ -266,6 +266,7 @@ struct MenuBarView: View {
 
     @State private var isRefreshing = false
     @State private var showError: String?
+    @State private var showLocalAccountPicker = false
     @State private var now = Date()
     @State private var runningThreadAttribution = OpenAIRunningThreadAttribution.empty
     @State private var runningThreadAttributionRefreshSequence = 0
@@ -376,6 +377,9 @@ struct MenuBarView: View {
             isCostSummaryHovered = false
             isCostPanelHovered = false
             DetachedWindowPresenter.shared.close(id: costPanelID)
+        }
+        .sheet(isPresented: $showLocalAccountPicker) {
+            LocalAccountPickerView()
         }
     }
 
@@ -550,15 +554,27 @@ struct MenuBarView: View {
                 .accessibilityIdentifier(OpenAIAccountCSVToolbarUI.accessibilityIdentifier)
                 .help(L.openAICSVToolbar)
 
-                Button {
-                    startOAuthLogin()
+                // 添加账号按钮 - 菜单形式
+                Menu {
+                    Button {
+                        showLocalAccountPicker = true
+                    } label: {
+                        Label(L.localAccountDiscoveryTitle, systemImage: "person.crop.circle.badge.import")
+                    }
+
+                    Button {
+                        startOAuthLogin()
+                    } label: {
+                        Label(L.newOAuthLogin, systemImage: "person.crop.circle.badge.plus")
+                    }
                 } label: {
                     Image(systemName: "person.crop.circle.badge.plus")
                         .font(.system(size: 12))
                 }
-                .buttonStyle(.borderless)
+                .menuStyle(.borderlessButton)
                 .accessibilityLabel("login toolbar button")
                 .accessibilityIdentifier("codexbar.login-openai.toolbar")
+                .help(L.addOpenAI)
 
                 Button {
                     openAddProviderWindow()

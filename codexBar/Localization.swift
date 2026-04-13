@@ -319,6 +319,16 @@ enum L {
     static var justUpdated: String     { zh ? "刚刚更新"            : "Just updated" }
     static var settings: String        { zh ? "设置"               : "Settings" }
 
+    // MARK: - Local Account Discovery
+    static var localAccountDiscoveryTitle: String { zh ? "从本地导入账号" : "Import from Local" }
+    static var localAccountDiscoveryHint: String { zh ? "检测到本地已登录的账号，可以直接导入" : "Detected locally logged-in accounts, you can import directly" }
+    static var localAccountSourceAuthJSON: String { zh ? "来自 auth.json" : "From auth.json" }
+    static var localAccountSourceTokenPool: String { zh ? "来自 token_pool.json" : "From token_pool.json" }
+    static var localAccountImportSuccess: String { zh ? "账号已导入" : "Account imported" }
+    static var localAccountAlreadyExists: String { zh ? "账号已存在" : "Account already exists" }
+    static var localAccountNoAccountsFound: String { zh ? "未找到本地账号" : "No local accounts found" }
+    static var newOAuthLogin: String { zh ? "新 OAuth 登录" : "New OAuth Login" }
+
     // MARK: - Codex Launch Probe
     static var codexLaunchProbeAppNotFound: String { zh ? "未找到 Codex.app" : "Codex.app not found" }
     static var codexLaunchProbeExecutableMissing: String { zh ? "Codex 可执行文件缺失" : "Codex executable missing" }
