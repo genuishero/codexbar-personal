@@ -1,0 +1,26 @@
+appId: "lzhl.codexbar"
+productName: "CodexBar"
+directories:
+  output: "release"
+  buildResources: "resources"
+files:
+  - "dist/**/*"
+  - "resources/**/*"
+  - "!**/node_modules/**"
+win:
+  target:
+    - target: "nsis"
+      arch:
+        - "x64"
+  icon: "resources/icon.ico"
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: "CodexBar"
+publish:
+  provider: "github"
+  owner: "GenuisZ"
+  repo: "codexbar-personal"
+  releaseType: "release"

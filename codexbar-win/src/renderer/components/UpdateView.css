@@ -1,0 +1,91 @@
+.update-view {
+  padding: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  text-align: center;
+}
+
+.update-header {
+  margin-bottom: 24px;
+}
+
+.update-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.update-content {
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+.version-info {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 24px;
+}
+
+.checking {
+  padding: 24px;
+  color: #666;
+}
+
+.error {
+  padding: 24px;
+  color: #cc0000;
+}
+
+.error button {
+  margin-top: 12px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  background: #f0f0f0;
+  cursor: pointer;
+}
+
+.no-update {
+  padding: 24px;
+  color: #0088cc;
+  font-size: 16px;
+}
+
+.update-available {
+  padding: 24px;
+  background: #f8f8f8;
+  border-radius: 8px;
+}
+
+.update-available h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  color: #0088cc;
+}
+
+.release-notes {
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: #666;
+}
+
+.checksum {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 16px;
+  word-break: break-all;
+}
+
+.download-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 4px;
+  background: #0088cc;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.download-btn:hover {
+  background: #0066aa;
+}

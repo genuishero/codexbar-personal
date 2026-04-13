@@ -1,0 +1,104 @@
+.settings-view {
+  padding: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  max-width: 600px;
+}
+
+.settings-header {
+  margin-bottom: 24px;
+}
+
+.settings-header h1 {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.settings-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f8f8f8;
+  border-radius: 8px;
+}
+
+.settings-section h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+}
+
+.setting-item {
+  margin-bottom: 12px;
+}
+
+.setting-item label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setting-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.setting-item input[type="number"] {
+  width: 60px;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.setting-item select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.setting-item button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  background: #0088cc;
+  color: white;
+  cursor: pointer;
+}
+
+.setting-item button:hover {
+  background: #0066aa;
+}
+
+.setting-item button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.update-info {
+  margin-top: 12px;
+  padding: 12px;
+  background: #e8f4f8;
+  border-radius: 4px;
+}
+
+.update-info p {
+  margin: 0 0 8px 0;
+}
+
+.settings-actions {
+  margin-top: 24px;
+}
+
+.save-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 4px;
+  background: #0088cc;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.save-btn:hover {
+  background: #0066aa;
+}
