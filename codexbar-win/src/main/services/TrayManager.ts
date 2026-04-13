@@ -7,7 +7,7 @@ export class TrayManager {
   private tray: Tray;
   private configManager: ConfigManager;
   private windowManager: WindowManager;
-  private contextMenu: Menu;
+  private contextMenu!: Menu;
 
   constructor(configManager: ConfigManager, windowManager: WindowManager) {
     this.configManager = configManager;

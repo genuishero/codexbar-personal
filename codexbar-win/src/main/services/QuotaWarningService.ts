@@ -29,7 +29,7 @@ export class QuotaWarningService {
     }
   }
 
-  private async checkQuotas(): void {
+  private async checkQuotas(): Promise<void> {
     const threshold = this.configManager.config.settings.quotaWarningThreshold;
 
     for (const account of this.configManager.accounts) {
