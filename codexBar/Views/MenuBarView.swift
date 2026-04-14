@@ -385,16 +385,18 @@ struct MenuBarView: View {
 
     @ViewBuilder
     private var mainMenuContent: some View {
-        VStack(spacing: 0) {
-            // 可滚动的内容区域（减去底部工具栏的高度限制）
-            AdaptiveMenuScrollContainer(maxHeight: maxMenuHeight - 60) {
+        ZStack(alignment: .bottom) {
+            // 可滚动的内容区域
+            AdaptiveMenuScrollContainer(maxHeight: maxMenuHeight) {
                 scrollableContent
             }
 
-            Divider()
-
-            // 固定底部工具栏
-            bottomToolbar
+            // 固定底部工具栏（带背景）
+            VStack(spacing: 0) {
+                Divider()
+                bottomToolbar
+                    .background(Color(NSColor.windowBackgroundColor))
+            }
         }
     }
 
@@ -532,6 +534,7 @@ struct MenuBarView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 44) // 预留底部工具栏空间
     }
 
     private var bottomToolbar: some View {
