@@ -10,16 +10,11 @@ class SecurityFeatureManager: ObservableObject {
     @Published var autoTokenRefresh: Bool = true
     @Published var quotaWarning: Bool = true
     @Published var keyboardShortcuts: Bool = true
-    @Published var useSecureStorage: Bool = true
-
-    // Keychain 存储状态
-    @Published var keychainAvailable: Bool = true
 
     private var cancellables = Set<AnyCancellable>()
 
     private init() {
         loadSettings()
-        checkKeychainAvailability()
         observeChanges()
     }
 
@@ -43,26 +38,6 @@ class SecurityFeatureManager: ObservableObject {
         if UserDefaults.standard.object(forKey: "keyboardShortcutsEnabled") == nil {
             keyboardShortcuts = true
         }
-
-        useSecureStorage = UserDefaults.standard.bool(forKey: "useSecureStorage")
-        if UserDefaults.standard.object(forKey: "useSecureStorage") == nil {
-            useSecureStorage = true
-        }
-    }
-
-    private func checkKeychainAvailability() {
-        // 尝试保存和读取一个测试值
-        let testKey = "codexbar.keychain.test"
-        let testValue = "test"
-
-        do {
-            try KeychainTokenStorage.shared.save(testValue, key: testKey)
-            let loaded = KeychainTokenStorage.shared.load(key: testKey)
-            try? KeychainTokenStorage.shared.delete(key: testKey)
-            keychainAvailable = (loaded == testValue)
-        } catch {
-            keychainAvailable = false
-        }
     }
 
     private func observeChanges() {
@@ -85,17 +60,11 @@ class SecurityFeatureManager: ObservableObject {
             .dropFirst()
             .sink { KeyboardShortcutsManager.shared.setEnabled($0) }
             .store(in: &cancellables)
-
-        $useSecureStorage
-            .dropFirst()
-            .sink { UserDefaults.standard.set($0, forKey: "useSecureStorage") }
-            .store(in: &cancellables)
     }
 
     /// 获取整体安全状态
     var overallStatus: SecurityStatus {
         let features: [Bool] = [
-            keychainAvailable,
             clipboardProtection,
             autoTokenRefresh,
             quotaWarning,
@@ -190,15 +159,6 @@ struct SecurityStatusView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.secondary)
 
-            // Keychain 加密存储
-            SecurityFeatureRow(
-                icon: "lock.fill",
-                title: "Keychain 加密存储",
-                description: "Token 存储在系统 Keychain 中",
-                enabled: manager.keychainAvailable,
-                canToggle: false
-            )
-
             // 剪贴板保护
             SecurityFeatureRow(
                 icon: "clipboard",
@@ -271,19 +231,13 @@ struct SecurityFeatureRow: View {
 
             Spacer()
 
-            // 开关或状态
-            if canToggle {
-                Toggle("", isOn: Binding(
-                    get: { enabled },
-                    set: { _ in onToggle?() }
-                ))
-                .toggleStyle(.switch)
-                .controlSize(.small)
-            } else {
-                Image(systemName: enabled ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(enabled ? .green : .red)
-            }
+            // 开关
+            Toggle("", isOn: Binding(
+                get: { enabled },
+                set: { _ in onToggle?() }
+            ))
+            .toggleStyle(.switch)
+            .controlSize(.small)
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
