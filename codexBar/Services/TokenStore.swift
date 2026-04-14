@@ -93,18 +93,24 @@ final class TokenStore: ObservableObject {
 
         self.localCostSummary = self.loadCachedLocalCostSummary()
         self.seedSwitchJournalIfNeeded()
-        self.pullActiveStateFromCodex()
+        let isAligned = self.pullActiveStateFromCodex()
         self.publishState()
-        try? self.syncService.synchronize(config: self.config)
+        
+        if isAligned {
+            try? self.syncService.synchronize(config: self.config)
+        }
     }
 
-    private func pullActiveStateFromCodex() {
+    @discardableResult
+    private func pullActiveStateFromCodex() -> Bool {
         guard let data = try? Data(contentsOf: CodexPaths.authURL),
               let auth = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return
+            // 如果文件不存在，同步当前配置是安全的
+            return !FileManager.default.fileExists(atPath: CodexPaths.authURL.path)
         }
 
         var configChanged = false
+        var isAligned = false
 
         if let tokensData = auth["tokens"] as? [String: Any],
            let accessToken = tokensData["access_token"] as? String,
@@ -125,15 +131,19 @@ final class TokenStore: ObservableObject {
                     }
                     configChanged = true
                 }
+                isAligned = true
             } else {
-                // Not in storage, auto-import and activate
+                // 不在存储中，尝试自动导入
                 let tokens = OAuthTokens(accessToken: accessToken, refreshToken: refreshToken, idToken: idToken)
                 let newAccount = AccountBuilder.build(from: tokens)
-                _ = self.config.upsertOAuthAccount(newAccount, activate: true)
-                configChanged = true
+                if !newAccount.accountId.isEmpty {
+                    _ = self.config.upsertOAuthAccount(newAccount, activate: true)
+                    configChanged = true
+                    isAligned = true
+                }
             }
         } else if let apiKey = auth["OPENAI_API_KEY"] as? String, !apiKey.isEmpty {
-            // API Key Account (Custom Provider)
+            // API Key 账号
             var found = false
             for provider in self.customProviders {
                 if let account = provider.accounts.first(where: { $0.apiKey == apiKey }) {
@@ -146,25 +156,33 @@ final class TokenStore: ObservableObject {
                         configChanged = true
                     }
                     found = true
+                    isAligned = true
                     break
                 }
             }
 
             if !found {
-                // Auto-import API Key into a default provider
-                try? self.addCustomProvider(
-                    label: "Imported OpenAI",
-                    baseURL: "https://api.openai.com/v1",
-                    accountLabel: "Imported Account",
-                    apiKey: apiKey
-                )
-                configChanged = true
+                // 尝试导入到默认 provider
+                do {
+                    try self.addCustomProvider(
+                        label: "Imported OpenAI",
+                        baseURL: "https://api.openai.com/v1",
+                        accountLabel: "Imported Account",
+                        apiKey: apiKey
+                    )
+                    configChanged = true
+                    isAligned = true
+                } catch {
+                    isAligned = false
+                }
             }
         }
 
         if configChanged {
             try? self.configStore.save(self.config)
         }
+        
+        return isAligned
     }
 
     var customProviders: [CodexBarProvider] {
