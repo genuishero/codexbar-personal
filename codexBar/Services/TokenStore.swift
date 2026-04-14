@@ -104,23 +104,37 @@ final class TokenStore: ObservableObject {
             return
         }
 
-        if let tokens = auth["tokens"] as? [String: Any],
-           let accountID = tokens["account_id"] as? String {
-            // OAuth Account
-            if let provider = self.oauthProvider(),
-               provider.accounts.contains(where: { $0.id == accountID || $0.openAIAccountId == accountID }) {
-                let actualID = provider.accounts.first(where: { $0.id == accountID || $0.openAIAccountId == accountID })?.id ?? accountID
-                if self.config.active.providerId != provider.id || self.config.active.accountId != actualID {
-                    self.config.active.providerId = provider.id
-                    self.config.active.accountId = actualID
-                    var updatedProvider = provider
-                    updatedProvider.activeAccountId = actualID
-                    self.upsertProvider(updatedProvider)
-                    try? self.configStore.save(self.config)
+        var configChanged = false
+
+        if let tokensData = auth["tokens"] as? [String: Any],
+           let accessToken = tokensData["access_token"] as? String,
+           let refreshToken = tokensData["refresh_token"] as? String,
+           let idToken = tokensData["id_token"] as? String {
+            
+            let accountID = tokensData["account_id"] as? String ?? ""
+            let provider = self.oauthProvider()
+            let existingAccount = provider?.accounts.first(where: { $0.id == accountID || $0.openAIAccountId == accountID })
+
+            if let existing = existingAccount {
+                if self.config.active.providerId != provider?.id || self.config.active.accountId != existing.id {
+                    self.config.active.providerId = provider?.id
+                    self.config.active.accountId = existing.id
+                    if var updatedProvider = provider {
+                        updatedProvider.activeAccountId = existing.id
+                        self.upsertProvider(updatedProvider)
+                    }
+                    configChanged = true
                 }
+            } else {
+                // Not in storage, auto-import and activate
+                let tokens = OAuthTokens(accessToken: accessToken, refreshToken: refreshToken, idToken: idToken)
+                let newAccount = AccountBuilder.build(from: tokens)
+                _ = self.config.upsertOAuthAccount(newAccount, activate: true)
+                configChanged = true
             }
         } else if let apiKey = auth["OPENAI_API_KEY"] as? String, !apiKey.isEmpty {
             // API Key Account (Custom Provider)
+            var found = false
             for provider in self.customProviders {
                 if let account = provider.accounts.first(where: { $0.apiKey == apiKey }) {
                     if self.config.active.providerId != provider.id || self.config.active.accountId != account.id {
@@ -129,11 +143,27 @@ final class TokenStore: ObservableObject {
                         var updatedProvider = provider
                         updatedProvider.activeAccountId = account.id
                         self.upsertProvider(updatedProvider)
-                        try? self.configStore.save(self.config)
+                        configChanged = true
                     }
+                    found = true
                     break
                 }
             }
+
+            if !found {
+                // Auto-import API Key into a default provider
+                try? self.addCustomProvider(
+                    label: "Imported OpenAI",
+                    baseURL: "https://api.openai.com/v1",
+                    accountLabel: "Imported Account",
+                    apiKey: apiKey
+                )
+                configChanged = true
+            }
+        }
+
+        if configChanged {
+            try? self.configStore.save(self.config)
         }
     }
 
