@@ -173,6 +173,11 @@ final class KeyboardShortcutsManager: ObservableObject {
         let accounts = TokenStore.shared.accounts
         let count = min(5, accounts.count)
 
+        guard count > 0 else {
+            shortcuts = [:]
+            return
+        }
+
         shortcuts = Dictionary(uniqueKeysWithValues: (1...count).map { number in
             let account = accounts[number - 1]
             return (number, account.email ?? account.accountId)
