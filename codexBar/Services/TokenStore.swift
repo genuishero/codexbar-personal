@@ -91,10 +91,50 @@ final class TokenStore: ObservableObject {
             }
             .store(in: &self.cancellables)
 
-        self.publishState()
         self.localCostSummary = self.loadCachedLocalCostSummary()
         self.seedSwitchJournalIfNeeded()
+        self.pullActiveStateFromCodex()
+        self.publishState()
         try? self.syncService.synchronize(config: self.config)
+    }
+
+    private func pullActiveStateFromCodex() {
+        guard let data = try? Data(contentsOf: CodexPaths.authURL),
+              let auth = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return
+        }
+
+        if let tokens = auth["tokens"] as? [String: Any],
+           let accountID = tokens["account_id"] as? String {
+            // OAuth Account
+            if let provider = self.oauthProvider(),
+               provider.accounts.contains(where: { $0.id == accountID || $0.openAIAccountId == accountID }) {
+                let actualID = provider.accounts.first(where: { $0.id == accountID || $0.openAIAccountId == accountID })?.id ?? accountID
+                if self.config.active.providerId != provider.id || self.config.active.accountId != actualID {
+                    self.config.active.providerId = provider.id
+                    self.config.active.accountId = actualID
+                    var updatedProvider = provider
+                    updatedProvider.activeAccountId = actualID
+                    self.upsertProvider(updatedProvider)
+                    try? self.configStore.save(self.config)
+                }
+            }
+        } else if let apiKey = auth["OPENAI_API_KEY"] as? String, !apiKey.isEmpty {
+            // API Key Account (Custom Provider)
+            for provider in self.customProviders {
+                if let account = provider.accounts.first(where: { $0.apiKey == apiKey }) {
+                    if self.config.active.providerId != provider.id || self.config.active.accountId != account.id {
+                        self.config.active.providerId = provider.id
+                        self.config.active.accountId = account.id
+                        var updatedProvider = provider
+                        updatedProvider.activeAccountId = account.id
+                        self.upsertProvider(updatedProvider)
+                        try? self.configStore.save(self.config)
+                    }
+                    break
+                }
+            }
+        }
     }
 
     var customProviders: [CodexBarProvider] {
