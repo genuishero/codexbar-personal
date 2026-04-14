@@ -84,13 +84,19 @@ final class CodexBarConfigStore {
     private func saveTokensToKeychain(_ config: CodexBarConfig) {
         for provider in config.providers where provider.kind == .openAIOAuth {
             for account in provider.accounts where account.kind == .oauthTokens {
-                if let accessToken = account.accessToken, !accessToken.isEmpty {
+                // 先从缓存检查是否需要保存
+                let cachedAccessToken = keychain.loadAccessToken(for: account.id)
+                let cachedRefreshToken = keychain.loadRefreshToken(for: account.id)
+                let cachedIdToken = keychain.loadIdToken(for: account.id)
+
+                // 只在 token 变化时才保存
+                if let accessToken = account.accessToken, !accessToken.isEmpty, cachedAccessToken != accessToken {
                     try? keychain.saveAccessToken(accessToken, for: account.id)
                 }
-                if let refreshToken = account.refreshToken, !refreshToken.isEmpty {
+                if let refreshToken = account.refreshToken, !refreshToken.isEmpty, cachedRefreshToken != refreshToken {
                     try? keychain.saveRefreshToken(refreshToken, for: account.id)
                 }
-                if let idToken = account.idToken, !idToken.isEmpty {
+                if let idToken = account.idToken, !idToken.isEmpty, cachedIdToken != idToken {
                     try? keychain.saveIdToken(idToken, for: account.id)
                 }
             }
@@ -99,7 +105,8 @@ final class CodexBarConfigStore {
         // 保存 API Key 类型账号的密钥
         for provider in config.providers where provider.kind == .openAICompatible {
             for account in provider.accounts where account.kind == .apiKey {
-                if let apiKey = account.apiKey, !apiKey.isEmpty {
+                let cachedAPIKey = keychain.loadProviderAPIKey(for: provider.id, accountName: account.id)
+                if let apiKey = account.apiKey, !apiKey.isEmpty, cachedAPIKey != apiKey {
                     try? keychain.saveProviderAPIKey(apiKey, for: provider.id, accountName: account.id)
                 }
             }
