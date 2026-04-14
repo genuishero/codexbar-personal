@@ -385,12 +385,20 @@ struct MenuBarView: View {
 
     @ViewBuilder
     private var mainMenuContent: some View {
-        AdaptiveMenuScrollContainer(maxHeight: maxMenuHeight) {
-            menuContentStack
+        VStack(spacing: 0) {
+            // 可滚动的内容区域（减去底部工具栏的高度限制）
+            AdaptiveMenuScrollContainer(maxHeight: maxMenuHeight - 60) {
+                scrollableContent
+            }
+
+            Divider()
+
+            // 固定底部工具栏
+            bottomToolbar
         }
     }
 
-    private var menuContentStack: some View {
+    private var scrollableContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(L.codexbar)
@@ -522,105 +530,105 @@ struct MenuBarView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
             }
-
-            Divider()
-
-            HStack(spacing: 10) {
-                if let lastUpdate = store.accounts.compactMap({ $0.lastChecked }).max() {
-                    Text(relativeTime(lastUpdate))
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                } else if let provider = store.activeProvider {
-                    Text(provider.hostLabel)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-
-                Menu {
-                    Button(L.exportOpenAICSVAction) {
-                        exportOpenAIAccountsCSV()
-                    }
-                    Button(L.importOpenAICSVAction) {
-                        importOpenAIAccountsCSV()
-                    }
-                } label: {
-                    Image(systemName: OpenAIAccountCSVToolbarUI.symbolName)
-                        .font(.system(size: 13))
-                }
-                .menuStyle(.borderlessButton)
-                .accessibilityLabel(L.openAICSVToolbar)
-                .accessibilityIdentifier(OpenAIAccountCSVToolbarUI.accessibilityIdentifier)
-                .help(L.openAICSVToolbar)
-
-                // 添加账号按钮 - 菜单形式
-                Menu {
-                    Button {
-                        showLocalAccountPicker = true
-                    } label: {
-                        Label(L.localAccountDiscoveryTitle, systemImage: "person.crop.circle.badge.import")
-                    }
-
-                    Button {
-                        startOAuthLogin()
-                    } label: {
-                        Label(L.newOAuthLogin, systemImage: "person.crop.circle.badge.plus")
-                    }
-                } label: {
-                    Image(systemName: "person.crop.circle.badge.plus")
-                        .font(.system(size: 13))
-                }
-                .menuStyle(.borderlessButton)
-                .accessibilityLabel("login toolbar button")
-                .accessibilityIdentifier("codexbar.login-openai.toolbar")
-                .help(L.addOpenAI)
-
-                Button {
-                    openAddProviderWindow()
-                } label: {
-                    Image(systemName: "plus.circle")
-                        .font(.system(size: 12))
-                }
-                .buttonStyle(.borderless)
-
-                Button {
-                    openSettingsWindow()
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 12))
-                }
-                .buttonStyle(.borderless)
-                .help(L.settings)
-
-                Button {
-                    switch L.languageOverride {
-                    case nil: L.languageOverride = true
-                    case true: L.languageOverride = false
-                    case false: L.languageOverride = nil
-                    }
-                    languageToggle.toggle()
-                } label: {
-                    let label = languageToggle ? L.languageOverride : L.languageOverride
-                    Text(label == nil ? "AUTO" : (label == true ? "中" : "EN"))
-                        .font(.system(size: 10, weight: .medium))
-                }
-                .buttonStyle(.borderless)
-
-                Button {
-                    AppLifecycleDiagnostics.shared.markTermination(reason: "quit_button")
-                    CodexBarInterprocess.postTerminatePrimary()
-                    NSApplication.shared.terminate(nil)
-                } label: {
-                    Image(systemName: "power")
-                        .font(.system(size: 12))
-                }
-                .buttonStyle(.borderless)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var bottomToolbar: some View {
+        HStack(spacing: 8) {
+            if let lastUpdate = store.accounts.compactMap({ $0.lastChecked }).max() {
+                Text(relativeTime(lastUpdate))
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            } else if let provider = store.activeProvider {
+                Text(provider.hostLabel)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            Menu {
+                Button(L.exportOpenAICSVAction) {
+                    exportOpenAIAccountsCSV()
+                }
+                Button(L.importOpenAICSVAction) {
+                    importOpenAIAccountsCSV()
+                }
+            } label: {
+                Image(systemName: OpenAIAccountCSVToolbarUI.symbolName)
+                    .font(.system(size: 11))
+            }
+            .menuStyle(.borderlessButton)
+            .accessibilityLabel(L.openAICSVToolbar)
+            .accessibilityIdentifier(OpenAIAccountCSVToolbarUI.accessibilityIdentifier)
+            .help(L.openAICSVToolbar)
+
+            // 添加账号按钮 - 菜单形式
+            Menu {
+                Button {
+                    showLocalAccountPicker = true
+                } label: {
+                    Label(L.localAccountDiscoveryTitle, systemImage: "person.crop.circle.badge.import")
+                }
+
+                Button {
+                    startOAuthLogin()
+                } label: {
+                    Label(L.newOAuthLogin, systemImage: "person.crop.circle.badge.plus")
+                }
+            } label: {
+                Image(systemName: "person.crop.circle.badge.plus")
+                    .font(.system(size: 11))
+            }
+            .menuStyle(.borderlessButton)
+            .accessibilityLabel("login toolbar button")
+            .accessibilityIdentifier("codexbar.login-openai.toolbar")
+            .help(L.addOpenAI)
+
+            Button {
+                openAddProviderWindow()
+            } label: {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.borderless)
+
+            Button {
+                openSettingsWindow()
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.borderless)
+            .help(L.settings)
+
+            Button {
+                switch L.languageOverride {
+                case nil: L.languageOverride = true
+                case true: L.languageOverride = false
+                case false: L.languageOverride = nil
+                }
+                languageToggle.toggle()
+            } label: {
+                let label = languageToggle ? L.languageOverride : L.languageOverride
+                Text(label == nil ? "AUTO" : (label == true ? "中" : "EN"))
+                    .font(.system(size: 9, weight: .medium))
+            }
+            .buttonStyle(.borderless)
+
+            Button {
+                AppLifecycleDiagnostics.shared.markTermination(reason: "quit_button")
+                CodexBarInterprocess.postTerminatePrimary()
+                NSApplication.shared.terminate(nil)
+            } label: {
+                Image(systemName: "power")
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
     }
 
     private func updateAvailableBanner(availability: AppUpdateAvailability) -> some View {

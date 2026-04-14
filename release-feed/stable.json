@@ -2,18 +2,18 @@
   "schemaVersion": 1,
   "channel": "stable",
   "release": {
-    "version": "2.1.7",
-    "publishedAt": "2026-04-14T14:10:00Z",
-    "summary": "修复 CSV 导入闪退问题",
-    "releaseNotesURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.1.7",
-    "downloadPageURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.1.7",
+    "version": "2.1.8",
+    "publishedAt": "2026-04-14T16:35:00Z",
+    "summary": "优化底部工具栏布局，账号多时不再被挤掉",
+    "releaseNotesURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.1.8",
+    "downloadPageURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.1.8",
     "deliveryMode": "guidedDownload",
     "artifacts": [
       {
         "architecture": "universal",
         "format": "dmg",
-        "downloadURL": "https://github.com/genuishero/codexbar-personal/releases/download/v2.1.7/CodexBar-2.1.7.dmg",
-        "sha256": "816a8db9704fb4c510ed54f846feb27671568e90788b9a97d074189e70915375"
+        "downloadURL": "https://github.com/genuishero/codexbar-personal/releases/download/v2.1.8/CodexBar-2.1.8.dmg",
+        "sha256": "aed87ac81c9972d3ac5b888fd0c898582d6d68b13197da47869de302e2b22a5a"
       }
     ]
   }
