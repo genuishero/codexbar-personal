@@ -2,18 +2,18 @@
   "schemaVersion": 1,
   "channel": "stable",
   "release": {
-    "version": "2.1.5",
-    "publishedAt": "2026-04-14T10:50:00Z",
-    "summary": "移除钥匙串存储，不再频繁请求密码",
-    "releaseNotesURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.1.5",
-    "downloadPageURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.1.5",
+    "version": "2.1.7",
+    "publishedAt": "2026-04-14T14:10:00Z",
+    "summary": "修复 CSV 导入闪退问题",
+    "releaseNotesURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.1.7",
+    "downloadPageURL": "https://github.com/genuishero/codexbar-personal/releases/tag/v2.1.7",
     "deliveryMode": "guidedDownload",
     "artifacts": [
       {
         "architecture": "universal",
         "format": "dmg",
-        "downloadURL": "https://github.com/genuishero/codexbar-personal/releases/download/v2.1.5/CodexBar-2.1.5.dmg",
-        "sha256": "8562138b37cc9c20b4ad811c7b3884739ededcfc3986ed0968695408be2728bb"
+        "downloadURL": "https://github.com/genuishero/codexbar-personal/releases/download/v2.1.7/CodexBar-2.1.7.dmg",
+        "sha256": "816a8db9704fb4c510ed54f846feb27671568e90788b9a97d074189e70915375"
       }
     ]
   }
