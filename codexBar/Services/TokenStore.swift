@@ -64,6 +64,7 @@ final class TokenStore: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
     private var aggregateGatewayLeaseProcessIDs: Set<pid_t>
     private var aggregateGatewayLeaseTimer: Timer?
+    private var isStartupAligned = true
 
     init(
         openAIAccountGatewayService: OpenAIAccountGatewayControlling = OpenAIAccountGatewayService.shared,
@@ -93,10 +94,10 @@ final class TokenStore: ObservableObject {
 
         self.localCostSummary = self.loadCachedLocalCostSummary()
         self.seedSwitchJournalIfNeeded()
-        let isAligned = self.pullActiveStateFromCodex()
+        self.isStartupAligned = self.pullActiveStateFromCodex()
         self.publishState()
         
-        if isAligned {
+        if self.isStartupAligned {
             try? self.syncService.synchronize(config: self.config)
         }
     }
@@ -253,6 +254,7 @@ final class TokenStore: ObservableObject {
         protectedByManualGrace: Bool = false
     ) throws {
         let previousAccountID = self.activeAccount()?.accountId
+        self.isStartupAligned = true
         _ = try self.config.activateOAuthAccount(accountID: account.accountId)
         try self.persist(syncCodex: true)
         try self.appendSwitchJournal(
@@ -277,6 +279,7 @@ final class TokenStore: ObservableObject {
             throw TokenStoreError.accountNotFound
         }
 
+        self.isStartupAligned = true
         provider.activeAccountId = accountID
         self.upsertProvider(provider)
         self.config.active.providerId = provider.id
@@ -556,6 +559,7 @@ final class TokenStore: ObservableObject {
     }
 
     private var effectiveGatewayMode: CodexBarOpenAIAccountUsageMode {
+        guard self.isStartupAligned else { return .switchAccount }
         if self.config.openAI.accountUsageMode == .aggregateGateway ||
             self.aggregateGatewayLeaseProcessIDs.isEmpty == false {
             return .aggregateGateway
