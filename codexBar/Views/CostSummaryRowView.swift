@@ -6,34 +6,49 @@ struct CostSummaryRowView: View {
     let compactTokens: (Int) -> String
 
     var body: some View {
-        HStack {
+        HStack(spacing: 8) {
             Text(L.costLabel)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 11, weight: .bold))
 
             Spacer()
 
-            Text("\(L.todayCost): \(currency(summary.todayCostUSD))")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
+            HStack(spacing: 4) {
+                Text(L.todayCost)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary.opacity(0.8))
+                Text(currency(summary.todayCostUSD))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.primary.opacity(0.9))
+            }
 
-            Text("·")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary.opacity(0.5))
+            Text(L.bulletSeparator)
+                .font(.system(size: 10))
+                .foregroundColor(.secondary.opacity(0.3))
 
-            Text("\(L.last30DaysCost): \(currency(summary.last30DaysCostUSD))")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
+            HStack(spacing: 4) {
+                Text(L.last30DaysCost)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary.opacity(0.8))
+                Text(currency(summary.last30DaysCostUSD))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.primary.opacity(0.9))
+            }
 
             Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.secondary)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.secondary.opacity(0.5))
+                .padding(.leading, 2)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.secondary.opacity(0.06))
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.secondary.opacity(0.05))
         )
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Color.primary.opacity(0.04), lineWidth: 1)
+        }
     }
 }
 

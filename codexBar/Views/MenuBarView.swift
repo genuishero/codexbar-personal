@@ -783,23 +783,27 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 14) {
             ForEach(groups) { group in
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    HStack(alignment: .center, spacing: 6) {
                         Text(group.email)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.primary)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .layoutPriority(1)
 
                         if let remark = group.headerQuotaRemark(now: now) {
+                            Text(L.bulletSeparator)
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary.opacity(0.3))
+
                             Text("重置: \(remark)")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 10, weight: .medium))
                                 .monospacedDigit()
-                                .foregroundColor(.orange)
+                                .foregroundColor(.orange.opacity(0.8))
                                 .lineLimit(1)
                         }
                     }
-                    .padding(.leading, 4)
+                    .padding(.leading, 6)
 
                     ForEach(group.accounts) { account in
                         let rowState = OpenAIAccountPresentation.rowState(
