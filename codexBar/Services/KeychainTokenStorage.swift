@@ -36,6 +36,10 @@ final class KeychainTokenStorage {
     private let idTokenPrefix = "idToken."
     private let apiKeyPrefix = "apiKey."
 
+    // 内存缓存，避免频繁访问钥匙串
+    private var cache: [String: String] = [:]
+    private let cacheLock = NSLock()
+
     private init() {}
 
     // MARK: - Token Storage
@@ -145,6 +149,11 @@ final class KeychainTokenStorage {
     // MARK: - Private Helpers
 
     func save(_ value: String, key: String) throws {
+        // 更新缓存
+        cacheLock.lock()
+        cache[key] = value
+        cacheLock.unlock()
+
         guard let data = value.data(using: .utf8) else {
             throw KeychainError.invalidData
         }
@@ -154,19 +163,43 @@ final class KeychainTokenStorage {
             kSecAttrService as String: serviceIdentifier,
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
 
-        // 先删除旧的（如果存在）
-        SecItemDelete(query as CFDictionary)
+        // 先尝试更新，如果不存在再添加
+        let updateQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: serviceIdentifier,
+            kSecAttrAccount as String: key
+        ]
 
-        let status = SecItemAdd(query as CFDictionary, nil)
-        guard status == errSecSuccess else {
-            throw KeychainError.saveFailed(status)
+        let updateAttributes: [String: Any] = [
+            kSecValueData as String: data
+        ]
+
+        let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary)
+
+        if updateStatus == errSecItemNotFound {
+            // 不存在，添加新项
+            SecItemDelete(query as CFDictionary)
+            let addStatus = SecItemAdd(query as CFDictionary, nil)
+            guard addStatus == errSecSuccess else {
+                throw KeychainError.saveFailed(addStatus)
+            }
+        } else if updateStatus != errSecSuccess {
+            throw KeychainError.saveFailed(updateStatus)
         }
     }
 
     func load(key: String) -> String? {
+        // 先检查缓存
+        cacheLock.lock()
+        if let cached = cache[key] {
+            cacheLock.unlock()
+            return cached
+        }
+        cacheLock.unlock()
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceIdentifier,
@@ -186,10 +219,24 @@ final class KeychainTokenStorage {
             return nil
         }
 
-        return String(data: data, encoding: .utf8)
+        let value = String(data: data, encoding: .utf8)
+
+        // 更新缓存
+        if let value = value {
+            cacheLock.lock()
+            cache[key] = value
+            cacheLock.unlock()
+        }
+
+        return value
     }
 
     func delete(key: String) throws {
+        // 清除缓存
+        cacheLock.lock()
+        cache.removeValue(forKey: key)
+        cacheLock.unlock()
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceIdentifier,
