@@ -23,10 +23,10 @@ final class QuotaWarningService: ObservableObject {
         threshold = UserDefaults.standard.integer(forKey: "quotaWarningThreshold")
         if threshold == 0 { threshold = 80 } // 默认 80%
 
-        enabled = UserDefaults.standard.bool(forKey: "quotaWarningEnabled")
-        if UserDefaults.standard.object(forKey: "quotaWarningEnabled") == nil {
-            enabled = true // 默认启用
-        }
+        enabled = SecurityFeatureDefaults.bool(
+            forKey: SecurityFeatureDefaults.quotaWarningEnabledKey,
+            default: true
+        )
     }
 
     private func observeThresholdChanges() {
@@ -44,6 +44,7 @@ final class QuotaWarningService: ObservableObject {
     /// 启动监控
     func startMonitoring() {
         guard enabled else { return }
+        guard monitoringTimer == nil else { return }
 
         // 每 60 秒检查一次
         monitoringTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
@@ -85,8 +86,8 @@ final class QuotaWarningService: ObservableObject {
         }
 
         // 获取用量百分比
-        let primaryPercent = account.primaryUsedPercent ?? 0
-        let secondaryPercent = account.secondaryUsedPercent ?? 0
+        let primaryPercent = account.primaryUsedPercent
+        let secondaryPercent = account.secondaryUsedPercent
 
         // 检查是否超过阈值
         let effectivePercent = max(primaryPercent, secondaryPercent)
@@ -102,19 +103,13 @@ final class QuotaWarningService: ObservableObject {
 
     /// 显示预警通知
     private func showWarning(account: TokenAccount, percent: Int) {
-        let content = NSUserNotification()
-        content.title = L.quotaWarningTitle
-        content.subtitle = account.email ?? account.accountId
-        content.informativeText = L.quotaWarningMessage(percent)
-        content.soundName = NSUserNotificationDefaultSoundName
-        content.deliveryDate = Date()
-        content.hasActionButton = true
-        content.actionButtonTitle = L.settings
-
-        // 设置标识符以便用户点击时打开设置
-        content.identifier = "quota-warning-\(account.accountId)"
-
-        NSUserNotificationCenter.default.deliver(content)
+        let accountLabel = account.email.isEmpty ? account.accountId : account.email
+        CodexBarNotificationCenter.deliver(
+            title: L.quotaWarningTitle,
+            subtitle: accountLabel,
+            body: L.quotaWarningMessage(percent),
+            identifier: "quota-warning-\(account.accountId)"
+        )
     }
 
     // MARK: - Public API
@@ -128,8 +123,9 @@ final class QuotaWarningService: ObservableObject {
 
     /// 设置启用状态
     func setEnabled(_ value: Bool) {
+        guard enabled != value else { return }
         enabled = value
-        UserDefaults.standard.set(value, forKey: "quotaWarningEnabled")
+        UserDefaults.standard.set(value, forKey: SecurityFeatureDefaults.quotaWarningEnabledKey)
 
         if value {
             startMonitoring()

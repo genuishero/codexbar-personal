@@ -104,7 +104,7 @@ final class LocalAccountDiscoveryService {
 
     /// 将发现的账号添加到 TokenStore
     func addDiscoveredAccount(_ account: DiscoveredLocalAccount, activate: Bool = false) throws {
-        var tokenAccount = TokenAccount(
+        let tokenAccount = TokenAccount(
             email: account.email,
             accountId: account.accountId,
             openAIAccountId: account.accountId,

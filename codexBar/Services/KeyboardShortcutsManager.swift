@@ -22,10 +22,10 @@ final class KeyboardShortcutsManager: ObservableObject {
     // MARK: - Settings
 
     private func loadSettings() {
-        enabled = UserDefaults.standard.bool(forKey: "keyboardShortcutsEnabled")
-        if UserDefaults.standard.object(forKey: "keyboardShortcutsEnabled") == nil {
-            enabled = true // 默认启用
-        }
+        enabled = SecurityFeatureDefaults.bool(
+            forKey: SecurityFeatureDefaults.keyboardShortcutsEnabledKey,
+            default: true
+        )
     }
 
     private func observeAccountChanges() {
@@ -43,6 +43,7 @@ final class KeyboardShortcutsManager: ObservableObject {
     /// 启动快捷键监听
     func startListening() {
         guard enabled else { return }
+        guard eventHandler == nil else { return }
 
         // 安装事件处理器
         var eventType = EventTypeSpec(
@@ -156,14 +157,13 @@ final class KeyboardShortcutsManager: ObservableObject {
     }
 
     private func showSwitchNotification(account: TokenAccount, number: Int) {
-        let content = NSUserNotification()
-        content.title = L.shortcutGuide
-        content.subtitle = account.email ?? account.accountId
-        content.informativeText = L.shortcutDescription(number, account.email ?? account.accountId)
-        content.soundName = NSUserNotificationDefaultSoundName
-        content.deliveryDate = Date()
-
-        NSUserNotificationCenter.default.deliver(content)
+        let accountLabel = account.email.isEmpty ? account.accountId : account.email
+        CodexBarNotificationCenter.deliver(
+            title: L.shortcutGuide,
+            subtitle: accountLabel,
+            body: L.shortcutDescription(number, accountLabel),
+            identifier: "shortcut-switch-\(number)-\(account.accountId)"
+        )
     }
 
     // MARK: - Public API
@@ -180,14 +180,16 @@ final class KeyboardShortcutsManager: ObservableObject {
 
         shortcuts = Dictionary(uniqueKeysWithValues: (1...count).map { number in
             let account = accounts[number - 1]
-            return (number, account.email ?? account.accountId)
+            let accountLabel = account.email.isEmpty ? account.accountId : account.email
+            return (number, accountLabel)
         })
     }
 
     /// 设置启用状态
     func setEnabled(_ value: Bool) {
+        guard enabled != value else { return }
         enabled = value
-        UserDefaults.standard.set(value, forKey: "keyboardShortcutsEnabled")
+        UserDefaults.standard.set(value, forKey: SecurityFeatureDefaults.keyboardShortcutsEnabledKey)
 
         if value {
             startListening()

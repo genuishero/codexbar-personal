@@ -26,8 +26,7 @@ private struct OpenAILoginWindowView: View {
             NSWorkspace.shared.open(url)
         } onCopyLink: {
             guard let authURL = oauth.pendingAuthURL else { return }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(authURL, forType: .string)
+            ClipboardManager.shared.setText(authURL)
         } onCancel: {
             OpenAILoginCoordinator.shared.cancel()
         }

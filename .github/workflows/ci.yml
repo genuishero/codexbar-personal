@@ -7,8 +7,21 @@ on:
     branches: [main]
 
 jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Version Sync
+        run: python3 scripts/sync_version_metadata.py --check
+
+      - name: Check Version Consistency
+        run: python3 scripts/check_version_consistency.py
+
   build:
     runs-on: macos-15
+    needs: metadata
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,7 +68,7 @@ jobs:
 
   release:
     runs-on: macos-15
-    needs: [build, test]
+    needs: [metadata, build, test]
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Checkout

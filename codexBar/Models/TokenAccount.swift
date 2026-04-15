@@ -130,6 +130,22 @@ struct TokenAccount: Codable, Identifiable {
         return .ok
     }
 
+    nonisolated var accessTokenExpiresAt: Date? {
+        let claims = AccountBuilder.decodeJWT(self.accessToken)
+        if let exp = claims["exp"] as? Double {
+            return Date(timeIntervalSince1970: exp)
+        }
+        if let exp = claims["exp"] as? Int {
+            return Date(timeIntervalSince1970: TimeInterval(exp))
+        }
+        return nil
+    }
+
+    nonisolated func isAccessTokenExpiring(within buffer: TimeInterval, now: Date = Date()) -> Bool {
+        guard let expiresAt = self.accessTokenExpiresAt else { return false }
+        return expiresAt.timeIntervalSince(now) <= buffer
+    }
+
     /// 5h 窗口重置倒计时文字
     var primaryResetDescription: String {
         let now = Date()

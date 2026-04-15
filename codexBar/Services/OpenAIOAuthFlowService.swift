@@ -38,6 +38,7 @@ enum OpenAIOAuthError: LocalizedError {
     case invalidCallback
     case noPendingFlow
     case flowNotFound(String)
+    case invalidGrant(String)
     case serverError(String)
 
     var errorDescription: String? {
@@ -47,6 +48,7 @@ enum OpenAIOAuthError: LocalizedError {
         case .invalidCallback: return "无法从回调链接中解析 code"
         case .noPendingFlow: return "当前没有待完成的登录流程，请重新发起登录"
         case .flowNotFound(let flowID): return "未找到待完成的登录流程: \(flowID)"
+        case .invalidGrant(let message): return "刷新授权失败: \(message)"
         case .serverError(let message): return "授权失败: \(message)"
         }
     }
@@ -226,6 +228,30 @@ struct OpenAIOAuthFlowService {
         try self.flowStore.cleanupExpiredFlows(olderThan: maxAge, now: self.now())
     }
 
+    func refreshAccount(_ account: TokenAccount) async throws -> TokenAccount {
+        let tokens = try await self.refreshTokens(
+            refreshToken: account.refreshToken,
+            fallbackIDToken: account.idToken
+        )
+
+        var refreshed = AccountBuilder.build(from: tokens)
+        refreshed.accountId = account.accountId
+        refreshed.openAIAccountId = refreshed.remoteAccountId.isEmpty ? account.remoteAccountId : refreshed.remoteAccountId
+        refreshed.email = refreshed.email.isEmpty ? account.email : refreshed.email
+        refreshed.primaryUsedPercent = account.primaryUsedPercent
+        refreshed.secondaryUsedPercent = account.secondaryUsedPercent
+        refreshed.primaryResetAt = account.primaryResetAt
+        refreshed.secondaryResetAt = account.secondaryResetAt
+        refreshed.primaryLimitWindowSeconds = account.primaryLimitWindowSeconds
+        refreshed.secondaryLimitWindowSeconds = account.secondaryLimitWindowSeconds
+        refreshed.lastChecked = account.lastChecked
+        refreshed.isActive = account.isActive
+        refreshed.isSuspended = false
+        refreshed.tokenExpired = false
+        refreshed.organizationName = account.organizationName
+        return refreshed
+    }
+
     private func makeAuthorizationURL(flow: PendingOAuthFlow) throws -> URL {
         var components = URLComponents(string: self.authURL)
         components?.queryItems = [
@@ -248,6 +274,36 @@ struct OpenAIOAuthFlowService {
     }
 
     private func exchangeCode(_ code: String, flow: PendingOAuthFlow) async throws -> OAuthTokens {
+        try await self.requestTokens(body: [
+            "grant_type": "authorization_code",
+            "client_id": self.clientId,
+            "code": code,
+            "redirect_uri": self.redirectURI,
+            "code_verifier": flow.codeVerifier,
+        ])
+    }
+
+    private func refreshTokens(
+        refreshToken: String,
+        fallbackIDToken: String
+    ) async throws -> OAuthTokens {
+        try await self.requestTokens(
+            body: [
+                "grant_type": "refresh_token",
+                "client_id": self.clientId,
+                "refresh_token": refreshToken,
+                "scope": self.scope,
+            ],
+            fallbackRefreshToken: refreshToken,
+            fallbackIDToken: fallbackIDToken
+        )
+    }
+
+    private func requestTokens(
+        body: [String: String],
+        fallbackRefreshToken: String? = nil,
+        fallbackIDToken: String? = nil
+    ) async throws -> OAuthTokens {
         guard let url = URL(string: self.tokenURL) else {
             throw OpenAIOAuthError.invalidURL
         }
@@ -257,13 +313,6 @@ struct OpenAIOAuthFlowService {
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
         let allowed = CharacterSet.alphanumerics.union(.init(charactersIn: "-._~"))
-        let body: [String: String] = [
-            "grant_type": "authorization_code",
-            "client_id": self.clientId,
-            "code": code,
-            "redirect_uri": self.redirectURI,
-            "code_verifier": flow.codeVerifier,
-        ]
         request.httpBody = body
             .map { key, value in
                 "\(key)=\(value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value)"
@@ -277,11 +326,17 @@ struct OpenAIOAuthFlowService {
         }
         if let error = json["error"] as? String {
             let description = json["error_description"] as? String ?? ""
+            if error == "invalid_grant" {
+                throw OpenAIOAuthError.invalidGrant(description)
+            }
             throw OpenAIOAuthError.serverError("\(error): \(description)")
         }
-        guard let accessToken = json["access_token"] as? String,
-              let refreshToken = json["refresh_token"] as? String,
-              let idToken = json["id_token"] as? String else {
+        guard let accessToken = json["access_token"] as? String else {
+            throw OpenAIOAuthError.noToken
+        }
+        let refreshToken = json["refresh_token"] as? String ?? fallbackRefreshToken
+        let idToken = json["id_token"] as? String ?? fallbackIDToken
+        guard let refreshToken, let idToken else {
             throw OpenAIOAuthError.noToken
         }
 
